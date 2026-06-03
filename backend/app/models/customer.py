@@ -17,11 +17,11 @@ class Customer(Base):
     grade: Mapped[str] = mapped_column(String(10), default="potential", nullable=False)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     follow_freq: Mapped[str] = mapped_column(String(10), default="daily", nullable=False)
-    follow_freq_updated_at: Mapped[str] = mapped_column(server_default="NOW()")
+    follow_freq_updated_at: Mapped[str] = mapped_column(String, nullable=False)
     consecutive_miss_cycles: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[str] = mapped_column(server_default="NOW()")
-    updated_at: Mapped[str] = mapped_column(server_default="NOW()")
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
     owner: Mapped["User"] = relationship(foreign_keys=[owner_id])  # type: ignore
     follow_up_records: Mapped[list["FollowUpRecord"]] = relationship(back_populates="customer")
@@ -35,7 +35,7 @@ class FollowUpRecord(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     is_effective: Mapped[bool] = mapped_column(Boolean, nullable=False)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[str] = mapped_column(server_default="NOW()")
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
 
     customer: Mapped[Customer] = relationship(back_populates="follow_up_records")
     images: Mapped[list["FollowUpImage"]] = relationship(back_populates="follow_up", cascade="all, delete-orphan")
@@ -48,6 +48,6 @@ class FollowUpImage(Base):
     follow_up_id: Mapped[int] = mapped_column(ForeignKey("follow_up_records.id", ondelete="CASCADE"), nullable=False)
     file_path: Mapped[str] = mapped_column(String(255), nullable=False)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    uploaded_at: Mapped[str] = mapped_column(server_default="NOW()")
+    uploaded_at: Mapped[str] = mapped_column(String, nullable=False)
 
     follow_up: Mapped[FollowUpRecord] = relationship(back_populates="images")

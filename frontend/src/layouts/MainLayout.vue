@@ -4,6 +4,7 @@
       <div class="logo">{{ collapsed ? 'TF' : 'TradeFlow' }}</div>
       <a-menu
         v-model:selectedKeys="selectedKeys"
+        v-model:openKeys="openKeys"
         theme="dark"
         mode="inline"
         @click="onMenuClick"
@@ -12,11 +13,12 @@
           <dashboard-outlined />
           <span>首页看板</span>
         </a-menu-item>
-        <a-menu-item key="/customers">
-          <team-outlined />
-          <span>客户管理</span>
-        </a-menu-item>
-        <a-menu-item v-if="auth.hasRole('purchaser', 'super_admin')" key="/products">
+        <a-sub-menu key="customers-group">
+          <template #title><team-outlined /><span>客户管理</span></template>
+          <a-menu-item key="/customers">客户列表</a-menu-item>
+          <a-menu-item key="/follow-ups">跟进记录</a-menu-item>
+        </a-sub-menu>
+        <a-menu-item key="/products">
           <database-outlined />
           <span>产品库</span>
         </a-menu-item>
@@ -64,8 +66,18 @@ const route = useRoute()
 const router = useRouter()
 const collapsed = ref(false)
 const selectedKeys = ref([route.path])
+const openKeys = ref(getOpenKeys(route.path))
 
-watch(() => route.path, (path) => { selectedKeys.value = [path] })
+function getOpenKeys(path) {
+  if (path.startsWith('/customers') || path.startsWith('/follow-ups')) return ['customers-group']
+  if (path.startsWith('/settings')) return ['settings']
+  return []
+}
+
+watch(() => route.path, (path) => {
+  selectedKeys.value = [path]
+  openKeys.value = getOpenKeys(path)
+})
 
 function onMenuClick({ key }) {
   router.push(key)
