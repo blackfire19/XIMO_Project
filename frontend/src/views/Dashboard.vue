@@ -51,7 +51,12 @@
         </a-col>
         <a-col :span="6">
           <a-card class="stat-card">
-            <a-statistic title="进行中订单" :value="bossData.active_orders?.length ?? 0" />
+            <a-statistic
+              title="进行中订单"
+              :value="bossData.active_orders?.length ?? 0"
+              :value-style="{ color: '#1677ff', cursor: 'pointer' }"
+              @click="$router.push('/formal-orders?active=1')"
+            />
           </a-card>
         </a-col>
         <a-col :span="6">
@@ -118,6 +123,8 @@
               :pagination="false"
               size="small"
               row-key="id"
+              :custom-row="(record) => ({ onClick: () => $router.push(`/formal-orders/${record.id}`) })"
+              :row-class-name="() => 'clickable-row'"
             />
           </a-card>
         </a-col>
@@ -127,7 +134,12 @@
       <a-card title="各状态订单统计" size="small" style="margin-top: 16px">
         <a-row :gutter="8">
           <a-col v-for="(count, st) in bossData.order_status_counts" :key="st" :span="4">
-            <a-statistic :title="ORDER_STATUS_LABELS[st] || st" :value="count" />
+            <a-statistic
+              :title="ORDER_STATUS_LABELS[st] || st"
+              :value="count"
+              :value-style="{ color: '#1677ff', cursor: 'pointer' }"
+              @click="$router.push(`/formal-orders?status=${st}`)"
+            />
           </a-col>
         </a-row>
       </a-card>
@@ -267,9 +279,11 @@
       <a-table
         :data-source="allOrdersData"
         :columns="orderColumnsDetail"
-        :pagination="{ pageSize: 10 }"
+        :pagination="{ pageSize: 10, showTotal: t => `共 ${t} 条` }"
         size="small"
         row-key="id"
+        :custom-row="(record) => ({ onClick: () => { $router.push(`/formal-orders/${record.id}`); showAllOrders = false } })"
+        :row-class-name="() => 'clickable-row'"
       />
     </a-modal>
 
@@ -346,9 +360,9 @@ const followSummarySearch = ref('')
 
 const ORDER_STATUS_LABELS = {
   confirmed: '已确认',
-  production: '生产备货中',
-  pending_shipment: '待出运',
-  shipped: '已出运',
+  production: '生产中',
+  ready: '待出运',
+  shipping: '出运中',
   completed: '已完结',
 }
 const GRADE_LABELS = { key: '重点', normal: '普通', potential: '潜在' }
@@ -539,5 +553,8 @@ onMounted(() => {
   margin-left: 8px;
   font-size: 12px;
   color: #888;
+}
+:deep(.clickable-row) {
+  cursor: pointer;
 }
 </style>

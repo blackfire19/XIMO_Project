@@ -1,5 +1,5 @@
 from sqlalchemy import Integer, String, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
@@ -22,8 +22,10 @@ class OrderAttachment(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), nullable=False)
-    doc_type: Mapped[str] = mapped_column(String(50), nullable=False)     # MTC / CO / export_license / customs / other
+    doc_type: Mapped[str] = mapped_column(String(50), nullable=False)
     file_path: Mapped[str] = mapped_column(String(255), nullable=False)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     uploaded_at: Mapped[str] = mapped_column(server_default="NOW()")
+
+    order: Mapped["Order"] = relationship(back_populates="attachments")  # type: ignore

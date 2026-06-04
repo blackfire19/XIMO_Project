@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 
 from app.config import settings
-from app.routers import auth, users, customers, products, quotations, orders, announcements, company, dashboard
+from app.routers import auth, users, customers, products, quotations, pricing_sheets, orders, announcements, dashboard, inquiries, formal_orders
 
 app = FastAPI(title="TradeFlow API", version="1.0.0")
 
@@ -26,9 +26,11 @@ app.include_router(users.router, prefix="/api")
 app.include_router(customers.router, prefix="/api")
 app.include_router(products.router, prefix="/api")
 app.include_router(quotations.router, prefix="/api")
+app.include_router(pricing_sheets.router, prefix="/api")
 app.include_router(orders.router, prefix="/api")
+app.include_router(inquiries.router, prefix="/api")
+app.include_router(formal_orders.router, prefix="/api")
 app.include_router(announcements.router, prefix="/api")
-app.include_router(company.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 
 

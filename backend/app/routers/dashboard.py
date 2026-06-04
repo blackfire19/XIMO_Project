@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user, require_roles
 from app.database import get_db
 from app.models.customer import Customer, FollowUpRecord
-from app.models.order import Order
+from app.models.inquiry import FormalOrder
 from app.models.user import User
+
+FREQ_DAYS = {"daily": 1, "weekly": 7, "monthly": 30}
 
 router = APIRouter(prefix="/dashboard", tags=["首页看板"])
 
@@ -58,9 +60,9 @@ def boss_dashboard(
 
     # 进行中订单总览（非已完结）
     active_orders = (
-        db.query(Order)
-        .filter(Order.status != "completed")
-        .order_by(Order.created_at.desc())
+        db.query(FormalOrder)
+        .filter(FormalOrder.status != "completed")
+        .order_by(FormalOrder.created_at.desc())
         .limit(20)
         .all()
     )
@@ -71,19 +73,19 @@ def boss_dashboard(
             "customer_id": o.customer_id,
             "status": o.status,
             "salesperson_id": o.salesperson_id,
-            "est_ready_date": str(o.est_ready_date) if o.est_ready_date else None,
+            "est_ready_date": str(o.est_production_date) if o.est_production_date else None,
             "created_at": str(o.created_at),
         }
         for o in active_orders
     ]
 
-    # 本月出运计划（待出运 + 已出运，当月创建）
+    # 本月出运计划（待出运 + 出运中，当月创建）
     month_prefix = today[:7]
     shipment_orders = (
-        db.query(Order)
+        db.query(FormalOrder)
         .filter(
-            Order.status.in_(["pending_shipment", "shipped"]),
-            func.substr(Order.created_at, 1, 7) == month_prefix,
+            FormalOrder.status.in_(["ready", "shipping"]),
+            func.substr(FormalOrder.created_at, 1, 7) == month_prefix,
         )
         .all()
     )
@@ -98,9 +100,11 @@ def boss_dashboard(
     ]
 
     # 各状态订单统计
-    status_counts = {}
-    for o in db.query(Order).all():
-        status_counts[o.status] = status_counts.get(o.status, 0) + 1
+    status_counts = dict(
+        db.query(FormalOrder.status, func.count(FormalOrder.id))
+        .group_by(FormalOrder.status)
+        .all()
+    )
 
     return {
         "today_follow_count": total_follow_count,
@@ -126,20 +130,32 @@ def salesperson_dashboard(
         .all()
     )
 
-    # 判断客户今日是否已有跟进记录
-    today_followed_ids = {
-        r.customer_id
-        for r in db.query(FollowUpRecord)
-        .filter(
-            FollowUpRecord.created_by == current_user.id,
-            func.substr(FollowUpRecord.created_at, 1, 10) == today,
+    # 批量查询每个客户最近一次跟进日期
+    customer_ids = [c.id for c in my_customers]
+    last_followup_map: dict[int, date] = {}
+    if customer_ids:
+        rows = (
+            db.query(
+                FollowUpRecord.customer_id,
+                func.max(FollowUpRecord.created_at).label("last_at"),
+            )
+            .filter(FollowUpRecord.customer_id.in_(customer_ids))
+            .group_by(FollowUpRecord.customer_id)
+            .all()
         )
-        .all()
-    }
+        for cid, last_at in rows:
+            last_followup_map[cid] = date.fromisoformat(str(last_at)[:10])
 
+    today_date = date.fromisoformat(today)
     due_today = []
+    today_follow_count = 0
     for c in my_customers:
-        if c.id not in today_followed_ids:
+        threshold = FREQ_DAYS.get(c.follow_freq, 1)
+        last = last_followup_map.get(c.id)
+        if last == today_date:
+            today_follow_count += 1
+        days_since = (today_date - last).days if last else threshold
+        if days_since >= threshold:
             due_today.append(
                 {
                     "id": c.id,
@@ -153,12 +169,12 @@ def salesperson_dashboard(
 
     # 我的进行中订单
     my_active_orders = (
-        db.query(Order)
+        db.query(FormalOrder)
         .filter(
-            Order.salesperson_id == current_user.id,
-            Order.status != "completed",
+            FormalOrder.salesperson_id == current_user.id,
+            FormalOrder.status != "completed",
         )
-        .order_by(Order.created_at.desc())
+        .order_by(FormalOrder.created_at.desc())
         .all()
     )
     active_orders = [
@@ -167,21 +183,15 @@ def salesperson_dashboard(
             "so_number": o.so_number,
             "customer_id": o.customer_id,
             "status": o.status,
-            "est_ready_date": str(o.est_ready_date) if o.est_ready_date else None,
+            "est_ready_date": str(o.est_production_date) if o.est_production_date else None,
             "created_at": str(o.created_at),
         }
         for o in my_active_orders
     ]
 
-    # 我的客户总数 & 今日跟进数
-    my_today_records = db.query(FollowUpRecord).filter(
-        FollowUpRecord.created_by == current_user.id,
-        func.substr(FollowUpRecord.created_at, 1, 10) == today,
-    ).count()
-
     return {
         "my_customer_count": len(my_customers),
         "due_today_customers": due_today,
-        "today_follow_count": my_today_records,
+        "today_follow_count": today_follow_count,
         "active_orders": active_orders,
     }

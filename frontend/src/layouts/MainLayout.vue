@@ -22,20 +22,19 @@
           <database-outlined />
           <span>产品库</span>
         </a-menu-item>
-        <a-menu-item key="/quotations">
+        <a-menu-item key="/inquiries">
           <file-text-outlined />
-          <span>询报价</span>
+          <span>询价单</span>
         </a-menu-item>
-        <a-menu-item key="/orders">
+        <a-menu-item key="/formal-orders">
           <shopping-outlined />
-          <span>订单管理</span>
+          <span>正式订单</span>
         </a-menu-item>
         <a-sub-menu v-if="auth.hasRole('super_admin')" key="settings">
           <template #title>
             <setting-outlined /><span>系统设置</span>
           </template>
           <a-menu-item key="/settings/users">用户管理</a-menu-item>
-          <a-menu-item key="/settings/company">公司信息</a-menu-item>
         </a-sub-menu>
       </a-menu>
     </a-layout-sider>
@@ -70,6 +69,7 @@ const openKeys = ref(getOpenKeys(route.path))
 
 function getOpenKeys(path) {
   if (path.startsWith('/customers') || path.startsWith('/follow-ups')) return ['customers-group']
+  if (path.startsWith('/pricing-sheets') || path.startsWith('/quotations')) return ['trade-group']
   if (path.startsWith('/settings')) return ['settings']
   return []
 }

@@ -9,3 +9,6 @@ from app.models.document import GeneratedDocument, OrderAttachment
 from app.models.announcement import Announcement
 from app.models.log import OperationLog
 from app.models.pref import UserColumnPref
+from app.models.inquiry import (
+    Inquiry, InquiryFile, FormalOrder, OrderFile, ShipmentBL, ShipmentContainer,
+)

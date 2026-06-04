@@ -37,30 +37,56 @@ const routes = [
         component: () => import('@/views/products/ProductList.vue'),
       },
       {
-        path: 'quotations',
-        name: 'Quotations',
-        component: () => import('@/views/quotations/QuotationList.vue'),
+        path: 'inquiries',
+        name: 'InquiryList',
+        component: () => import('@/views/inquiry/InquiryList.vue'),
       },
       {
-        path: 'quotations/:id',
-        name: 'QuotationDetail',
-        component: () => import('@/views/quotations/QuotationDetail.vue'),
+        path: 'inquiries/:id',
+        name: 'InquiryDetail',
+        component: () => import('@/views/inquiry/InquiryDetail.vue'),
       },
       {
-        path: 'orders',
-        name: 'Orders',
-        component: () => import('@/views/orders/OrderList.vue'),
+        path: 'formal-orders',
+        name: 'OrderList',
+        component: () => import('@/views/inquiry/OrderList.vue'),
       },
       {
-        path: 'orders/:id',
+        path: 'formal-orders/:id',
         name: 'OrderDetail',
-        component: () => import('@/views/orders/OrderDetail.vue'),
+        component: () => import('@/views/inquiry/OrderDetail.vue'),
       },
-      {
-        path: 'settings/company',
-        name: 'CompanySettings',
-        component: () => import('@/views/settings/CompanySettings.vue'),
-      },
+      // 旧版询报价 & 订单管理暂时屏蔽，功能重设计中
+      // {
+      //   path: 'pricing-sheets',
+      //   name: 'PricingSheets',
+      //   component: () => import('@/views/pricing/PricingSheetList.vue'),
+      // },
+      // {
+      //   path: 'pricing-sheets/:id',
+      //   name: 'PricingSheetDetail',
+      //   component: () => import('@/views/pricing/PricingSheetDetail.vue'),
+      // },
+      // {
+      //   path: 'quotations',
+      //   name: 'Quotations',
+      //   component: () => import('@/views/quotations/QuotationList.vue'),
+      // },
+      // {
+      //   path: 'quotations/:id',
+      //   name: 'QuotationDetail',
+      //   component: () => import('@/views/quotations/QuotationDetail.vue'),
+      // },
+      // {
+      //   path: 'orders',
+      //   name: 'Orders',
+      //   component: () => import('@/views/orders/OrderList.vue'),
+      // },
+      // {
+      //   path: 'orders/:id',
+      //   name: 'OrderDetail',
+      //   component: () => import('@/views/orders/OrderDetail.vue'),
+      // },
       {
         path: 'settings/users',
         name: 'UserManagement',
