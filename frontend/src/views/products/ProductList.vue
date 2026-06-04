@@ -21,7 +21,7 @@
         </a-select>
       </a-col>
       <a-col :span="5">
-        <a-select v-model:value="filters.material" placeholder="材质" allowClear style="width:100%" @change="loadData">
+        <a-select v-model:value="filters.material" placeholder="材质" allow-clear style="width:100%" @change="loadData">
           <a-select-option value="20#">20#</a-select-option>
           <a-select-option value="45#">45#</a-select-option>
           <a-select-option value="Q345B">Q345B</a-select-option>
@@ -32,7 +32,7 @@
         <a-input-search
           v-model:value="filters.spec"
           placeholder="搜索规格，如 63.5*12"
-          allowClear
+          allow-clear
           @search="loadData"
           @clear="loadData"
         />
@@ -259,7 +259,7 @@ async function doImport() {
 onMounted(loadData)
 </script>
 
-<style>
+<style scoped>
 .col-resize-handle {
   position: absolute;
   right: -4px;
@@ -269,7 +269,7 @@ onMounted(loadData)
   cursor: col-resize;
   z-index: 1;
 }
-th {
+:deep(th) {
   position: relative;
 }
 </style>

@@ -41,12 +41,23 @@
       :data-source="customers"
       :loading="loading"
       row-key="id"
-      :pagination="{ pageSize: 20, showTotal: (t) => `共 ${t} 条` }"
+      :pagination="{
+        current: currentPage,
+        pageSize: pageSize,
+        total: total,
+        showTotal: (t) => `共 ${t} 条`,
+        onChange: onPageChange,
+        showSizeChanger: false,
+      }"
       @row-click="(record) => goDetail(record.id)"
       :row-class-name="() => 'clickable-row'"
     >
       <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'grade'">
+        <template v-if="column.key === 'company_name'">
+          <a @click.stop="goDetail(record.id)">{{ record.company_name }}</a>
+        </template>
+
+        <template v-else-if="column.key === 'grade'">
           <a-tag :color="gradeColor(record.grade)">{{ gradeLabel(record.grade) }}</a-tag>
         </template>
 
@@ -60,7 +71,6 @@
 
         <template v-else-if="column.key === 'actions'">
           <a-space @click.stop>
-            <a-button size="small" @click="goDetail(record.id)">详情</a-button>
             <a-button
               v-if="canEdit(record)"
               size="small"
@@ -143,6 +153,9 @@ const route = useRoute()
 
 const customers = ref([])
 const loading = ref(false)
+const total = ref(0)
+const currentPage = ref(1)
+const pageSize = 10
 const search = reactive({ company_name: '', country: '', contact_name: '', contact: '' })
 const saving = ref(false)
 const modalVisible = ref(false)
@@ -167,14 +180,14 @@ const rules = {
 }
 
 const columns = [
-  { title: '公司名称', dataIndex: 'company_name', key: 'company_name' },
+  { title: '公司名称', key: 'company_name' },
   { title: '国家', dataIndex: 'country', key: 'country' },
   { title: '联系人', dataIndex: 'contact_name', key: 'contact_name' },
   { title: '邮箱', dataIndex: 'email', key: 'email' },
   { title: '分级', key: 'grade', width: 80 },
   { title: '跟进频次', key: 'follow_freq', width: 100 },
   { title: '负责人', key: 'owner', width: 100 },
-  { title: '操作', key: 'actions', width: 130 },
+  { title: '操作', key: 'actions', width: 80 },
 ]
 
 function gradeColor(g) {
@@ -199,23 +212,29 @@ function goDetail(id) {
   router.push(`/customers/${id}`)
 }
 
-async function loadData(params = {}) {
+function buildParams(page = currentPage.value) {
+  const params = { page, page_size: pageSize }
+  if (search.company_name) params.company_name = search.company_name
+  if (search.country) params.country = search.country
+  if (search.contact_name) params.contact_name = search.contact_name
+  if (search.contact) params.contact = search.contact
+  return params
+}
+
+async function loadData(page = currentPage.value) {
   loading.value = true
   try {
-    const res = await customersApi.list(params)
-    customers.value = res.data
+    const res = await customersApi.list(buildParams(page))
+    customers.value = res.data.items
+    total.value = res.data.total
+    currentPage.value = res.data.page
   } finally {
     loading.value = false
   }
 }
 
 function doSearch() {
-  const params = {}
-  if (search.company_name) params.company_name = search.company_name
-  if (search.country) params.country = search.country
-  if (search.contact_name) params.contact_name = search.contact_name
-  if (search.contact) params.contact = search.contact
-  loadData(params)
+  loadData(1)
 }
 
 function resetSearch() {
@@ -223,7 +242,11 @@ function resetSearch() {
   search.country = ''
   search.contact_name = ''
   search.contact = ''
-  loadData()
+  loadData(1)
+}
+
+function onPageChange(page) {
+  loadData(page)
 }
 
 function openCreate() {
@@ -286,18 +309,14 @@ async function handleSubmit() {
     }
 
     modalVisible.value = false
-    await loadData()
+    await loadData(1)
   } finally {
     saving.value = false
   }
 }
 
 onMounted(() => {
-  if (route.query.today_follow === '1') {
-    loadData({ today_follow: true })
-  } else {
-    loadData()
-  }
+  loadData()
 })
 </script>
 

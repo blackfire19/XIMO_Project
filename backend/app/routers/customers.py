@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -120,7 +120,6 @@ def list_all_follow_ups(
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
-    from datetime import date as _date
     role = current.role.name
     Creator = aliased(User)
     q = (
@@ -137,8 +136,7 @@ def list_all_follow_ups(
             Creator.full_name.ilike(f"%{keyword}%")
         )
     if today:
-        from datetime import date as _date
-        today_str = _date.today().isoformat()
+        today_str = date.today().isoformat()
         q = q.filter(FollowUpRecord.created_at.like(f"{today_str}%"))
     if effective is not None:
         q = q.filter(FollowUpRecord.is_effective == effective)
@@ -166,13 +164,21 @@ def list_all_follow_ups(
 
 # ── List ──────────────────────────────────────────────────────────────────────
 
-@router.get("/", response_model=list[CustomerOut])
+class CustomerPage(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    items: list[CustomerOut]
+
+
+@router.get("/", response_model=CustomerPage)
 def list_customers(
     company_name: Optional[str] = None,
     country: Optional[str] = None,
     contact_name: Optional[str] = None,
     contact: Optional[str] = None,
-    today_follow: bool = False,   # 仅返回今日有跟进记录的客户
+    page: int = 1,
+    page_size: int = 10,
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
@@ -191,20 +197,11 @@ def list_customers(
             (Customer.email.ilike(f"%{contact}%")) |
             (Customer.phone.ilike(f"%{contact}%"))
         )
-    if today_follow:
-        from datetime import date as _date
-        today_str = _date.today().isoformat()
-        followed_ids = {
-            r.customer_id for r in
-            db.query(FollowUpRecord.customer_id)
-            .filter(FollowUpRecord.created_at.like(f"{today_str}%"))
-            .all()
-        }
-        q = q.filter(Customer.id.in_(followed_ids))
-    customers = q.order_by(Customer.id.desc()).all()
-    for c in customers:
+    total = q.count()
+    items = q.order_by(Customer.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    for c in items:
         _check_downgrade(c, db)
-    return customers
+    return CustomerPage(total=total, page=page, page_size=page_size, items=items)
 
 
 # ── Create ────────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-from sqlalchemy import Date, Integer, Numeric, String, ForeignKey
+from sqlalchemy import Date, Integer, Numeric, String, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -13,13 +13,12 @@ class Shipment(Base):
     etd: Mapped[str | None] = mapped_column(Date)
     eta: Mapped[str | None] = mapped_column(Date)
     bl_number: Mapped[str | None] = mapped_column(String(100))
-    # 集装箱专用
     container_type: Mapped[str | None] = mapped_column(String(20))
     container_number: Mapped[str | None] = mapped_column(String(50))
     seal_number: Mapped[str | None] = mapped_column(String(50))
-    # 散货船专用
     weight_mt: Mapped[float | None] = mapped_column(Numeric(12, 3))
     status: Mapped[str] = mapped_column(String(20), default="planned", nullable=False)
+    remarks: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[str] = mapped_column(server_default="NOW()")
     updated_at: Mapped[str] = mapped_column(server_default="NOW()")

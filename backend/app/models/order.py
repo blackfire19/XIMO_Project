@@ -23,6 +23,9 @@ class Order(Base):
 
     items: Mapped[list["OrderItem"]] = relationship(back_populates="order", cascade="all, delete-orphan")
     shipments: Mapped[list["Shipment"]] = relationship(back_populates="order")  # type: ignore
+    attachments: Mapped[list["OrderAttachment"]] = relationship(back_populates="order")  # type: ignore
+    customer: Mapped["Customer"] = relationship(foreign_keys=[customer_id])  # type: ignore
+    salesperson: Mapped["User"] = relationship(foreign_keys=[salesperson_id])  # type: ignore
 
 
 class OrderItem(Base):
