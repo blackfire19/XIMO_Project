@@ -6,7 +6,7 @@ import os
 from app.config import settings
 from app.routers import auth, users, customers, products, quotations, pricing_sheets, orders, announcements, dashboard, inquiries, formal_orders
 
-app = FastAPI(title="TradeFlow API", version="1.0.0")
+app = FastAPI(title="XIMOSteel API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
