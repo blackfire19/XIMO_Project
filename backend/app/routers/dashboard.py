@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from calendar import monthrange
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -75,13 +76,16 @@ def boss_dashboard(
     ]
 
     # 本月出运计划：关联提单 ETD 在本月的待出运/出运中订单
-    month_prefix = today[:7]
+    today_date = date.fromisoformat(today)
+    month_start = today_date.replace(day=1)
+    month_end = today_date.replace(day=monthrange(today_date.year, today_date.month)[1])
     shipment_orders = (
         db.query(FormalOrder)
         .join(ShipmentBL, ShipmentBL.order_id == FormalOrder.id)
         .filter(
             FormalOrder.status.in_(["ready", "shipping"]),
-            func.substr(ShipmentBL.etd, 1, 7) == month_prefix,
+            ShipmentBL.etd >= month_start,
+            ShipmentBL.etd <= month_end,
         )
         .all()
     )
