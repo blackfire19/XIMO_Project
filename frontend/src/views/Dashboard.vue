@@ -96,7 +96,13 @@
                     </template>
                     <template #description>{{ item.content.length > 60 ? item.content.slice(0, 60) + '…' : item.content }}</template>
                   </a-list-item-meta>
-                  <template #extra>{{ formatDate(item.created_at) }}</template>
+                  <template #extra>
+                    <a-space>
+                      <span style="color:#999;font-size:12px">{{ formatDate(item.created_at) }}</span>
+                      <a-button v-if="!dashEvaluatedIds.has(item.id)" size="small" type="primary" ghost @click="openQuickEval(item)">评价</a-button>
+                      <span v-else style="color:#bbb;font-size:12px">已评</span>
+                    </a-space>
+                  </template>
                 </a-list-item>
               </template>
             </a-list>
@@ -143,10 +149,41 @@
           </a-col>
         </a-row>
       </a-card>
+
+      <!-- 员工评价趋势（老板/超管视角） -->
+      <a-card size="small" style="margin-top: 16px">
+        <template #title>
+          员工评价趋势
+        </template>
+        <template #extra>
+          <a-radio-group v-model:value="evalPeriod" size="small" @change="loadEvalStats">
+            <a-radio-button value="week">近7天</a-radio-button>
+            <a-radio-button value="month">近30天</a-radio-button>
+          </a-radio-group>
+        </template>
+        <div v-if="evalStatsEmpty" style="padding: 24px 0; text-align: center; color: #bbb">
+          暂无评价数据
+        </div>
+        <template v-else>
+          <!-- 各员工周期平均分 -->
+          <div class="eval-avg-row">
+            <div v-for="item in evalAvgList" :key="item.subject_name" class="eval-avg-item">
+              <span class="eval-avg-name">{{ item.subject_name }}</span>
+              <span class="eval-avg-score" :class="scoreClass(item.avg_score)">
+                {{ item.avg_score }}
+              </span>
+              <span class="eval-avg-unit">分</span>
+              <span class="eval-avg-count">（{{ item.count }} 次）</span>
+            </div>
+          </div>
+          <div ref="evalChartRef" style="height: 300px" />
+        </template>
+      </a-card>
     </template>
 
     <!-- ====== 业务员看板 ====== -->
     <template v-else-if="auth.hasRole('salesperson')">
+
       <a-row :gutter="16" class="stat-row">
         <a-col :span="8">
           <a-card class="stat-card">
@@ -237,6 +274,33 @@
           </a-card>
         </a-col>
       </a-row>
+
+      <!-- 我的评价趋势（员工视角） -->
+      <a-card size="small" style="margin-top: 16px">
+        <template #title>我的评价趋势</template>
+        <template #extra>
+          <a-radio-group v-model:value="evalPeriod" size="small" @change="loadEvalStats">
+            <a-radio-button value="week">近7天</a-radio-button>
+            <a-radio-button value="month">近30天</a-radio-button>
+          </a-radio-group>
+        </template>
+        <div v-if="evalStatsEmpty" style="padding: 24px 0; text-align: center; color: #bbb">
+          暂无评价数据
+        </div>
+        <template v-else>
+          <div class="eval-avg-row">
+            <div v-for="item in evalAvgList" :key="item.subject_name" class="eval-avg-item">
+              <span class="eval-avg-name">{{ item.subject_name }}</span>
+              <span class="eval-avg-score" :class="scoreClass(item.avg_score)">
+                {{ item.avg_score }}
+              </span>
+              <span class="eval-avg-unit">分</span>
+              <span class="eval-avg-count">（{{ item.count }} 次）</span>
+            </div>
+          </div>
+          <div ref="evalChartRef" style="height: 260px" />
+        </template>
+      </a-card>
     </template>
 
     <!-- 采购员看板（仅公告） -->
@@ -266,7 +330,14 @@
         :pagination="{ pageSize: 10, showTotal: t => `共 ${t} 条` }"
         size="small"
         row-key="id"
-      />
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'action'">
+            <a-button v-if="!dashEvaluatedIds.has(record.id)" size="small" type="primary" ghost @click="openQuickEval(record)">评价</a-button>
+            <span v-else style="color:#bbb;font-size:12px">已评</span>
+          </template>
+        </template>
+      </a-table>
     </a-modal>
 
     <!-- ====== 弹窗：进行中订单全部（老板 + 业务员共用） ====== -->
@@ -332,16 +403,52 @@
         show-count
       />
     </a-modal>
+
+    <!-- ====== 弹窗：快捷评价 ====== -->
+    <a-modal
+      v-model:open="quickEvalVisible"
+      :title="`评价 ${quickEvalTarget?.creator_name ?? ''}`"
+      :confirm-loading="quickEvalSubmitting"
+      ok-text="提交评价"
+      cancel-text="取消"
+      @ok="submitQuickEval"
+      width="400px"
+    >
+      <a-form layout="vertical" style="margin-top: 8px">
+        <a-form-item label="评分（1-10分）" required>
+          <a-input-number
+            v-model:value="quickEvalForm.score"
+            :min="1"
+            :max="10"
+            :precision="0"
+            style="width: 120px"
+            placeholder="1-10"
+          />
+          <span style="margin-left: 8px; color: #999; font-size: 13px">/ 10 分</span>
+        </a-form-item>
+        <a-form-item label="评语（选填）">
+          <a-textarea
+            v-model:value="quickEvalForm.comment"
+            :rows="3"
+            placeholder="输入评语..."
+            :maxlength="200"
+            show-count
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { NotificationOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { dashboardApi } from '@/api/dashboard'
 import { announcementsApi } from '@/api/announcements'
+import { evaluationsApi } from '@/api/evaluations'
+import * as echarts from 'echarts'
 
 const auth = useAuthStore()
 
@@ -357,6 +464,13 @@ const showAllFollowSummary = ref(false)
 const showAllOrders = ref(false)
 const showAllDueToday = ref(false)
 const followSummarySearch = ref('')
+
+// 评价趋势图
+const evalPeriod = ref('month')
+const evalChartRef = ref(null)
+const evalStatsEmpty = ref(true)
+const evalAvgList = ref([])   // [{ subject_name, avg_score, count }]
+let evalChart = null
 
 const ORDER_STATUS_LABELS = {
   confirmed: '已确认',
@@ -385,19 +499,7 @@ const orderColumns = [
 ]
 
 const orderColumnsDetail = [
-  { title: '订单号', dataIndex: 'so_number', key: 'so_number' },
-  {
-    title: '状态',
-    dataIndex: 'status',
-    key: 'status',
-    customRender: ({ text }) => ORDER_STATUS_LABELS[text] || text,
-  },
-  {
-    title: '预计完成',
-    dataIndex: 'est_ready_date',
-    key: 'est_ready_date',
-    customRender: ({ text }) => text || '-',
-  },
+  ...orderColumns,
   {
     title: '创建时间',
     dataIndex: 'created_at',
@@ -418,19 +520,66 @@ const followSummaryColumns = [
     title: '客户',
     dataIndex: 'customer_name',
     key: 'customer_name',
-    width: 160,
+    width: 140,
     ellipsis: true,
   },
-  { title: '创建人', dataIndex: 'creator_name', key: 'creator_name', width: 90 },
+  { title: '创建人', dataIndex: 'creator_name', key: 'creator_name', width: 80 },
   { title: '跟进内容', dataIndex: 'content', key: 'content', ellipsis: true },
   {
     title: '时间',
     dataIndex: 'created_at',
     key: 'created_at',
-    width: 110,
+    width: 100,
     customRender: ({ text }) => formatDate(text),
   },
+  { title: '操作', key: 'action', width: 70 },
 ]
+
+// 已评价的 followup ID 集合（看板用）
+const dashEvaluatedIds = ref(new Set())
+
+async function loadDashEvaluatedIds() {
+  try {
+    const res = await evaluationsApi.list({ target_type: 'followup' })
+    dashEvaluatedIds.value = new Set(res.data.map(e => e.target_id))
+  } catch {}
+}
+
+// 快捷评价
+const quickEvalVisible = ref(false)
+const quickEvalTarget = ref(null)   // { id, created_by, creator_name }
+const quickEvalForm = ref({ score: null, comment: '' })
+const quickEvalSubmitting = ref(false)
+
+function openQuickEval(item) {
+  quickEvalTarget.value = item
+  quickEvalForm.value = { score: null, comment: '' }
+  quickEvalVisible.value = true
+}
+
+async function submitQuickEval() {
+  const s = quickEvalForm.value.score
+  if (!s) { message.warning('请填写评分'); return }
+  if (s < 1 || s > 10) { message.warning('评分须在 1-10 之间'); return }
+  quickEvalSubmitting.value = true
+  try {
+    await evaluationsApi.create({
+      target_type: 'followup',
+      target_id: quickEvalTarget.value.id,
+      subject_id: quickEvalTarget.value.created_by,
+      score: quickEvalForm.value.score,
+      comment: quickEvalForm.value.comment || null,
+    })
+    message.success(`已对 ${quickEvalTarget.value.creator_name} 提交评价`)
+    quickEvalVisible.value = false
+    loadEvalStats()
+    loadDashEvaluatedIds()
+  } catch {
+    message.error('提交失败')
+  } finally {
+    quickEvalSubmitting.value = false
+  }
+}
 
 function openFollowSummaryModal() {
   followSummarySearch.value = ''
@@ -446,14 +595,14 @@ const dueTodayColumns = [
     dataIndex: 'grade',
     key: 'grade',
     width: 90,
-    customRender: ({ text }) => ({ key: '重点', normal: '普通', potential: '潜在' }[text] || text),
+    customRender: ({ text }) => GRADE_LABELS[text] || text,
   },
   {
     title: '跟进频次',
     dataIndex: 'follow_freq',
     key: 'follow_freq',
     width: 90,
-    customRender: ({ text }) => ({ daily: '每日', weekly: '每周', monthly: '每月' }[text] || text),
+    customRender: ({ text }) => FREQ_LABELS[text] || text,
   },
   { title: '操作', key: 'action', width: 80 },
 ]
@@ -462,6 +611,12 @@ const allOrdersData = computed(() => {
   if (auth.hasRole('boss', 'super_admin')) return bossData.value.active_orders || []
   return salesData.value.active_orders || []
 })
+
+function scoreClass(score) {
+  if (score >= 8) return 'score-high'
+  if (score >= 6) return 'score-mid'
+  return 'score-low'
+}
 
 function formatDate(str) {
   if (!str) return ''
@@ -484,6 +639,7 @@ async function loadDashboard() {
     try {
       const res = await dashboardApi.boss()
       bossData.value = res.data
+      loadDashEvaluatedIds()
     } catch {}
   } else if (auth.hasRole('salesperson')) {
     try {
@@ -491,6 +647,65 @@ async function loadDashboard() {
       salesData.value = res.data
     } catch {}
   }
+}
+
+async function loadEvalStats() {
+  try {
+    const res = await evaluationsApi.stats(evalPeriod.value)
+    const stats = res.data  // EmployeeEvalStats[]
+    if (!stats || stats.length === 0) {
+      evalStatsEmpty.value = true
+      evalAvgList.value = []
+      return
+    }
+    evalStatsEmpty.value = false
+
+    // 计算每个员工在当前周期的总平均分
+    evalAvgList.value = stats.map(emp => {
+      const totalScore = emp.points.reduce((s, p) => s + p.avg_score * p.count, 0)
+      const totalCount = emp.points.reduce((s, p) => s + p.count, 0)
+      return {
+        subject_name: emp.subject_name,
+        avg_score: totalCount > 0 ? Math.round((totalScore / totalCount) * 10) / 10 : 0,
+        count: totalCount,
+      }
+    }).sort((a, b) => b.avg_score - a.avg_score)
+
+    // 收集所有日期并排序
+    const allDates = [...new Set(stats.flatMap(s => s.points.map(p => p.date)))].sort()
+
+    const series = stats.map(emp => ({
+      name: emp.subject_name,
+      type: 'line',
+      smooth: true,
+      data: allDates.map(d => {
+        const pt = emp.points.find(p => p.date === d)
+        return pt ? pt.avg_score : null
+      }),
+      connectNulls: true,
+    }))
+
+    await nextTick()
+    if (!evalChartRef.value) return
+    if (!evalChart) {
+      evalChart = echarts.init(evalChartRef.value)
+    }
+    evalChart.setOption({
+      tooltip: { trigger: 'axis', formatter: (params) => {
+        let s = params[0].axisValue + '<br/>'
+        params.forEach(p => {
+          const val = p.value != null ? `<b>${p.value}</b> 分` : '<span style="color:#bbb">无记录</span>'
+          s += `${p.marker}${p.seriesName}: ${val}<br/>`
+        })
+        return s
+      }},
+      legend: { top: 0 },
+      grid: { top: 40, bottom: 24, left: 40, right: 20, containLabel: true },
+      xAxis: { type: 'category', data: allDates, boundaryGap: false },
+      yAxis: { type: 'value', min: 0, max: 10, interval: 2, name: '分' },
+      series,
+    }, true)
+  } catch {}
 }
 
 async function revokeAnnouncement(id) {
@@ -525,6 +740,9 @@ async function submitAnnouncement() {
 onMounted(() => {
   loadAnnouncements()
   loadDashboard()
+  if (auth.hasRole('boss', 'super_admin', 'salesperson')) {
+    loadEvalStats()
+  }
 })
 </script>
 
@@ -556,5 +774,44 @@ onMounted(() => {
 }
 :deep(.clickable-row) {
   cursor: pointer;
+}
+.eval-avg-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 4px 8px;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 4px;
+}
+.eval-avg-item {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  padding: 6px 12px;
+}
+.eval-avg-name {
+  font-size: 13px;
+  color: #555;
+  margin-right: 4px;
+}
+.eval-avg-score {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+.score-high { color: #52c41a; }
+.score-mid  { color: #1677ff; }
+.score-low  { color: #ff4d4f; }
+.eval-avg-unit {
+  font-size: 12px;
+  color: #999;
+}
+.eval-avg-count {
+  font-size: 12px;
+  color: #bbb;
+  margin-left: 2px;
 }
 </style>

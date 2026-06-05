@@ -60,6 +60,13 @@ class InquiryListItem(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class InquiryPage(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    items: list[InquiryListItem]
+
+
 class InquiryOut(BaseModel):
     id: int
     enq_number: str
@@ -185,6 +192,13 @@ class FormalOrderListItem(BaseModel):
     status: str
     created_at: str
     model_config = {"from_attributes": True}
+
+
+class FormalOrderPage(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    items: list[FormalOrderListItem]
 
 
 class FormalOrderOut(BaseModel):

@@ -10,6 +10,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.database import SessionLocal
+import app.models  # 确保所有模型都注册到 SQLAlchemy
 from app.models.user import Role, User
 from app.core.security import hash_password
 

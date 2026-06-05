@@ -106,7 +106,7 @@ def create_quotation(
     if current_user.role.name == "salesperson" and customer.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="只能为自己名下的客户创建报价单")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
     for _attempt in range(5):
         pi_number = _generate_pi_number(db, code)
@@ -222,7 +222,7 @@ def update_quotation(
             )
             db.add(item)
 
-    quotation.updated_at = datetime.utcnow().isoformat()
+    quotation.updated_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     db.commit()
     db.refresh(quotation)
     return quotation
@@ -251,7 +251,7 @@ def update_status(
         )
 
     quotation.status = status
-    quotation.updated_at = datetime.utcnow().isoformat()
+    quotation.updated_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
     # PI 作废时：若来自核价单，检查该核价单所有 PI 是否全部作废
     # 全部作废则恢复核价单为 confirmed 状态，允许重新编辑/转PI
@@ -271,7 +271,7 @@ def update_status(
             all_expired = all(s[0] == "expired" for s in sibling_statuses)
             if all_expired:
                 ps.status = "confirmed"
-                ps.updated_at = datetime.utcnow().isoformat()
+                ps.updated_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
     db.commit()
     db.refresh(quotation)
@@ -334,7 +334,7 @@ def convert_to_order(
     so_count = db.query(func.count(Order.id)).filter(Order.so_number.like(f"{so_prefix}%")).scalar()
     so_number = f"{so_prefix}{so_count + 1:02d}"
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     order = Order(
         so_number=so_number,
         quotation_id=quotation.id,

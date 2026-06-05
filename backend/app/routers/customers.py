@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, aliased
 
 from app.config import settings
+from app.core.constants import FREQ_DAYS, FREQ_ORDER
 from app.core.deps import get_current_user, require_roles
 from app.database import get_db
 from app.models.customer import Customer, FollowUpImage, FollowUpRecord
@@ -23,64 +24,78 @@ from app.schemas.customer import (
 
 router = APIRouter(prefix="/customers", tags=["客户管理"])
 
-FREQ_ORDER = ["daily", "weekly", "monthly"]
-CYCLE_DAYS = {"daily": 1, "weekly": 7, "monthly": 30}
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _parse_dt(val) -> datetime:
     if isinstance(val, datetime):
-        return val
-    s = str(val)
-    for fmt in (
-        "%Y-%m-%d %H:%M:%S.%f%z",
-        "%Y-%m-%d %H:%M:%S.%f",
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%dT%H:%M:%S.%f",
-        "%Y-%m-%dT%H:%M:%S",
-    ):
+        return val.replace(tzinfo=None) if val.tzinfo else val
+    s = str(val)[:19]
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
         try:
-            return datetime.strptime(s[:26], fmt.replace("%z", ""))
+            return datetime.strptime(s, fmt)
         except ValueError:
             continue
-    return datetime.utcnow()
+    try:
+        return datetime.strptime(s[:10], "%Y-%m-%d")
+    except ValueError:
+        return _utcnow()
+
+
+def _batch_check_downgrade(customers: list, db: Session) -> None:
+    """Batch downgrade check: one query for all customers in the page."""
+    if not customers:
+        return
+
+    now = _utcnow()
+    customer_ids = [c.id for c in customers]
+
+    rows = (
+        db.query(
+            FollowUpRecord.customer_id,
+            func.max(FollowUpRecord.created_at).label("last_effective_at"),
+        )
+        .filter(
+            FollowUpRecord.customer_id.in_(customer_ids),
+            FollowUpRecord.is_effective == True,  # noqa: E712
+        )
+        .group_by(FollowUpRecord.customer_id)
+        .all()
+    )
+    last_effective_map = {r.customer_id: r.last_effective_at for r in rows}
+
+    changed = False
+    for customer in customers:
+        if customer.follow_freq == "monthly":
+            continue
+        cycle_days = FREQ_DAYS[customer.follow_freq]
+        last_change_dt = _parse_dt(customer.follow_freq_updated_at)
+        last_eff_str = last_effective_map.get(customer.id)
+        if last_eff_str:
+            effective_dt = _parse_dt(last_eff_str)
+            baseline = max(effective_dt, last_change_dt)
+        else:
+            baseline = last_change_dt
+        days_elapsed = (now - baseline).total_seconds() / 86400
+        missed_cycles = int(days_elapsed / cycle_days)
+        if missed_cycles >= 3:
+            idx = FREQ_ORDER.index(customer.follow_freq)
+            if idx < len(FREQ_ORDER) - 1:
+                customer.follow_freq = FREQ_ORDER[idx + 1]
+                customer.consecutive_miss_cycles = 0
+                customer.follow_freq_updated_at = now.strftime("%Y-%m-%d %H:%M:%S")
+                changed = True
+    if changed:
+        db.commit()
 
 
 def _check_downgrade(customer: Customer, db: Session) -> None:
-    """Downgrade follow_freq if 3+ consecutive cycles have no effective record."""
-    if customer.follow_freq == "monthly":
-        return
-
-    now = datetime.utcnow()
-    cycle_days = CYCLE_DAYS[customer.follow_freq]
-
-    last_effective = (
-        db.query(FollowUpRecord)
-        .filter(
-            FollowUpRecord.customer_id == customer.id,
-            FollowUpRecord.is_effective == True,  # noqa: E712
-        )
-        .order_by(FollowUpRecord.created_at.desc())
-        .first()
-    )
-
-    last_change_dt = _parse_dt(customer.follow_freq_updated_at)
-
-    if last_effective:
-        effective_dt = _parse_dt(last_effective.created_at)
-        baseline = max(effective_dt, last_change_dt)
-    else:
-        baseline = last_change_dt
-
-    days_elapsed = (now - baseline).total_seconds() / 86400
-    missed_cycles = int(days_elapsed / cycle_days)
-
-    if missed_cycles >= 3:
-        idx = FREQ_ORDER.index(customer.follow_freq)
-        if idx < len(FREQ_ORDER) - 1:
-            customer.follow_freq = FREQ_ORDER[idx + 1]
-            customer.consecutive_miss_cycles = 0
-            customer.follow_freq_updated_at = now.strftime("%Y-%m-%d %H:%M:%S")
-            db.commit()
+    """Single-customer downgrade check (used in detail/update endpoints)."""
+    _batch_check_downgrade([customer], db)
 
 
 def _can_access(customer: Customer, current_user: User) -> bool:
@@ -100,6 +115,7 @@ class FollowUpListItem(BaseModel):
     is_effective: bool
     created_at: str
     creator_name: str
+    created_by: int
     model_config = {"from_attributes": True}
 
 
@@ -112,9 +128,9 @@ class FollowUpListPage(BaseModel):
 
 @router.get("/follow-ups/all", response_model=FollowUpListPage)
 def list_all_follow_ups(
-    keyword: Optional[str] = None,   # 客户名称 / 跟进内容 / 创建人
-    today: bool = False,              # 仅今日
-    effective: Optional[bool] = None, # True=有效 False=无效 None=全部
+    keyword: Optional[str] = None,
+    today: bool = False,
+    effective: Optional[bool] = None,
     page: int = 1,
     page_size: int = 10,
     db: Session = Depends(get_db),
@@ -156,6 +172,7 @@ def list_all_follow_ups(
             is_effective=r.is_effective,
             created_at=r.created_at,
             creator_name=creator_name,
+            created_by=r.created_by,
         )
         for r, company_name, creator_name in rows
     ]
@@ -199,8 +216,7 @@ def list_customers(
         )
     total = q.count()
     items = q.order_by(Customer.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
-    for c in items:
-        _check_downgrade(c, db)
+    _batch_check_downgrade(items, db)
     return CustomerPage(total=total, page=page, page_size=page_size, items=items)
 
 
@@ -215,7 +231,7 @@ def create_customer(
     if body.grade not in ("key", "normal", "potential"):
         raise HTTPException(status_code=400, detail="客户分级无效")
 
-    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    now_str = _utcnow().strftime("%Y-%m-%d %H:%M:%S")
     customer = Customer(
         company_name=body.company_name,
         country=body.country,
@@ -276,7 +292,7 @@ def update_customer(
             raise HTTPException(status_code=400, detail="客户分级无效")
         setattr(customer, field, val)
 
-    customer.updated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    customer.updated_at = _utcnow().strftime("%Y-%m-%d %H:%M:%S")
     db.commit()
     db.refresh(customer)
     return customer
@@ -305,7 +321,7 @@ def upgrade_freq(
     if new_idx >= current_idx:
         raise HTTPException(status_code=400, detail="只能手动升级跟进频次")
 
-    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    now_str = _utcnow().strftime("%Y-%m-%d %H:%M:%S")
     customer.follow_freq = body.freq
     customer.follow_freq_updated_at = now_str
     customer.consecutive_miss_cycles = 0
@@ -368,7 +384,7 @@ async def create_follow_up(
     if not _can_access(customer, current):
         raise HTTPException(status_code=403, detail="无权限访问该客户")
 
-    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    now_str = _utcnow().strftime("%Y-%m-%d %H:%M:%S")
     record = FollowUpRecord(
         customer_id=customer_id,
         content=content,
@@ -377,9 +393,8 @@ async def create_follow_up(
         created_at=now_str,
     )
     db.add(record)
-    db.flush()  # get record.id before saving images
+    db.flush()
 
-    # Save uploaded images
     upload_dir = os.path.join(settings.UPLOAD_DIR, "follow_ups", str(customer_id))
     os.makedirs(upload_dir, exist_ok=True)
 
@@ -387,6 +402,11 @@ async def create_follow_up(
         if not file.filename:
             continue
         ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in ALLOWED_IMAGE_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"不支持的图片格式 {ext}，仅允许 {', '.join(ALLOWED_IMAGE_EXTENSIONS)}",
+            )
         saved_name = f"{uuid.uuid4().hex}{ext}"
         saved_path = os.path.join(upload_dir, saved_name)
         data = await file.read()
@@ -398,10 +418,10 @@ async def create_follow_up(
             follow_up_id=record.id,
             file_path=rel_path,
             file_name=file.filename,
+            uploaded_at=now_str,
         )
         db.add(img)
 
-    # If effective, reset consecutive miss cycles
     if is_effective:
         customer.consecutive_miss_cycles = 0
 

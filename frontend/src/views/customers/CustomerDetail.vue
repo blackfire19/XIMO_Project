@@ -112,10 +112,17 @@
                       v-for="img in item.images"
                       :key="img.id"
                       :src="img.file_path"
-                      width="80"
-                      style="margin-right: 8px; border-radius: 4px"
+                      :width="80"
+                      :height="80"
+                      :preview="{ src: img.file_path }"
+                      style="border-radius: 4px; object-fit: cover; cursor: pointer"
                     />
                   </div>
+                  <EvaluationPanel
+                    target-type="followup"
+                    :target-id="item.id"
+                    :subject-id="item.created_by"
+                  />
                 </div>
               </a-timeline-item>
             </a-timeline>
@@ -192,6 +199,7 @@ import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { customersApi } from '@/api/customers'
+import EvaluationPanel from '@/components/EvaluationPanel.vue'
 
 const TRADE_TERMS = ['EXW', 'FOB', 'CFR', 'CIF', 'DAP', 'DDP']
 
@@ -409,6 +417,13 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 8px;
+}
+.followup-images :deep(.ant-image-img) {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 4px;
 }
 .pagination-bar {
   display: flex;

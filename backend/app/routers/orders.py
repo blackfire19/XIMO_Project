@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
@@ -140,7 +140,7 @@ def update_order_status(
     order.status = body.status
     if body.est_ready_date is not None:
         order.est_ready_date = body.est_ready_date
-    order.updated_at = datetime.utcnow().isoformat()
+    order.updated_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     db.commit()
     db.refresh(order)
     return order
@@ -175,7 +175,7 @@ def add_shipment(
     if not _can_edit(current_user, order):
         raise HTTPException(status_code=403, detail="权限不足")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     shipment = Shipment(
         order_id=order_id,
         ship_type=body.ship_type,
@@ -229,7 +229,7 @@ def update_shipment(
         if val is not None:
             setattr(shipment, field, val)
 
-    shipment.updated_at = datetime.utcnow().isoformat()
+    shipment.updated_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     db.commit()
     db.refresh(shipment)
     return shipment
@@ -300,7 +300,7 @@ async def upload_attachment(
         f.write(content)
 
     rel_path = f"order_attachments/{order_id}/{saved_name}"
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     att = OrderAttachment(
         order_id=order_id,
         doc_type=doc_type,

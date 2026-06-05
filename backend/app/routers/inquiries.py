@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
@@ -16,6 +16,7 @@ from app.schemas.inquiry import (
     InquiryUpdate,
     InquiryDepositUpdate,
     InquiryListItem,
+    InquiryPage,
     InquiryOut,
     InquiryFileOut,
 )
@@ -61,7 +62,7 @@ def _gen_enq_number(db: Session, salesperson: User) -> str:
 
 
 # ── 询价单 CRUD ───────────────────────────────────────────────
-@router.get("/", response_model=list[InquiryListItem])
+@router.get("/", response_model=InquiryPage)
 def list_inquiries(
     customer_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
@@ -80,12 +81,14 @@ def list_inquiries(
         q = q.filter(Inquiry.status == status)
     if enq_number:
         q = q.filter(Inquiry.enq_number.ilike(f"%{enq_number}%"))
-    return (
+    total = q.count()
+    items = (
         q.order_by(Inquiry.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
+    return InquiryPage(total=total, page=page, page_size=page_size, items=items)
 
 
 @router.post("/", response_model=InquiryOut)
@@ -105,7 +108,7 @@ def create_inquiry(
     if not salesperson:
         raise HTTPException(status_code=404, detail="业务员不存在")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     for _attempt in range(5):
         inq = Inquiry(
             enq_number=_gen_enq_number(db, salesperson),
@@ -159,7 +162,7 @@ def update_inquiry(
         raise HTTPException(status_code=403, detail="权限不足")
     if body.remarks is not None:
         inq.remarks = body.remarks
-    inq.updated_at = datetime.utcnow().isoformat()
+    inq.updated_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     db.commit()
     db.refresh(inq)
     return inq
@@ -201,7 +204,7 @@ def set_deposit(
     inq.deposit_amount = body.deposit_amount
     inq.deposit_date = body.deposit_date or date.today()
     inq.status = "deposit_received"
-    inq.updated_at = datetime.utcnow().isoformat()
+    inq.updated_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     db.commit()
     db.refresh(inq)
     return inq
@@ -221,7 +224,7 @@ def void_inquiry(
     if inq.status == "converted":
         raise HTTPException(status_code=400, detail="已转订单的询价单无法作废")
     inq.status = "void"
-    inq.updated_at = datetime.utcnow().isoformat()
+    inq.updated_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     db.commit()
     db.refresh(inq)
     return inq
@@ -276,7 +279,7 @@ async def upload_inquiry_file(
         file_path=rel_path,
         note=note,
         uploaded_by=current_user.id,
-        uploaded_at=datetime.utcnow().isoformat(),
+        uploaded_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
     )
     db.add(rec)
     db.commit()

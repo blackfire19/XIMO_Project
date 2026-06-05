@@ -116,7 +116,7 @@ def create_pricing_sheet(
         if current_user.role.name == "salesperson" and customer.owner_id != current_user.id:
             raise HTTPException(status_code=403, detail="只能关联自己名下的客户")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
     for _attempt in range(5):
         ps = PricingSheet(
@@ -233,7 +233,7 @@ def update_pricing_sheet(
                 sort_order=item_data.sort_order or idx,
             ))
 
-    ps.updated_at = datetime.utcnow().isoformat()
+    ps.updated_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     db.commit()
     db.refresh(ps)
     return ps
@@ -255,7 +255,7 @@ def confirm_pricing_sheet(
     if not ps.items:
         raise HTTPException(status_code=400, detail="核价单没有产品明细，无法确认")
     ps.status = "confirmed"
-    ps.updated_at = datetime.utcnow().isoformat()
+    ps.updated_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     db.commit()
     db.refresh(ps)
     return ps
@@ -287,7 +287,7 @@ def convert_to_pi(
     pi_count = db.query(func.count(Quotation.id)).filter(Quotation.pi_number.like(f"{pi_prefix}%")).scalar()
     pi_number = f"{pi_prefix}{pi_count + 1:02d}"
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     quotation = Quotation(
         pi_number=pi_number,
         pricing_sheet_id=ps.id,
@@ -363,7 +363,7 @@ async def upload_image(
         file_path=rel_path,
         file_name=file.filename or saved_name,
         uploaded_by=current_user.id,
-        uploaded_at=datetime.utcnow().isoformat(),
+        uploaded_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
     )
     db.add(img)
     db.commit()
