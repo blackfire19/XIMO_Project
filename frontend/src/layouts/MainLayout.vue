@@ -1,7 +1,7 @@
 <template>
   <a-layout style="min-height: 100vh">
     <a-layout-sider v-model:collapsed="collapsed" collapsible>
-      <div class="logo">{{ collapsed ? 'TF' : 'TradeFlow' }}</div>
+      <div class="logo">{{ collapsed ? 'XS' : 'XIMOSteel' }}</div>
       <a-menu
         v-model:selectedKeys="selectedKeys"
         v-model:openKeys="openKeys"

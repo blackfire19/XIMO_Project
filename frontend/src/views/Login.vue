@@ -1,6 +1,6 @@
 <template>
   <div class="login-wrapper">
-    <a-card class="login-card" title="TradeFlow 登录">
+    <a-card class="login-card" title="XIMOSteel 登录">
       <a-form :model="form" @finish="onFinish" layout="vertical">
         <a-form-item label="用户名" name="username" :rules="[{ required: true }]">
           <a-input v-model:value="form.username" size="large" />

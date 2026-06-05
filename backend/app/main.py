@@ -4,9 +4,9 @@ from fastapi.staticfiles import StaticFiles
 import os
 
 from app.config import settings
-from app.routers import auth, users, customers, products, quotations, pricing_sheets, orders, announcements, dashboard, inquiries, formal_orders
+from app.routers import auth, users, customers, products, quotations, pricing_sheets, orders, announcements, dashboard, inquiries, formal_orders, evaluations
 
-app = FastAPI(title="TradeFlow API", version="1.0.0")
+app = FastAPI(title="XIMOSteel API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,6 +32,7 @@ app.include_router(inquiries.router, prefix="/api")
 app.include_router(formal_orders.router, prefix="/api")
 app.include_router(announcements.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(evaluations.router, prefix="/api")
 
 
 @app.get("/api/health")

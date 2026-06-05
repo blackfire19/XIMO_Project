@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
@@ -70,6 +70,6 @@ def revoke_announcement(
     if ann.created_by != current_user.id and current_user.role.name != "super_admin":
         raise HTTPException(status_code=403, detail="只能撤销自己发布的公告")
     ann.is_active = False
-    ann.revoked_at = datetime.utcnow().isoformat()
+    ann.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     ann.revoked_by = current_user.id
     db.commit()

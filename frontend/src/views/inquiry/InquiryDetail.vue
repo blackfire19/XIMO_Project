@@ -99,6 +99,15 @@
       </a-col>
     </a-row>
 
+    <!-- 评价记录 -->
+    <a-card size="small" style="margin-bottom: 16px" v-if="inq">
+      <EvaluationPanel
+        target-type="inquiry"
+        :target-id="inq.id"
+        :subject-id="inq.salesperson.id"
+      />
+    </a-card>
+
     <!-- 登记定金 -->
     <a-modal v-model:open="depositOpen" title="登记定金" :confirm-loading="saving" @ok="doDeposit">
       <a-form layout="vertical">
@@ -137,6 +146,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { message, Empty } from 'ant-design-vue'
 import { inquiriesApi, formalOrdersApi } from '@/api/inquiries'
 import { useAuthStore } from '@/stores/auth'
+import EvaluationPanel from '@/components/EvaluationPanel.vue'
 
 const route = useRoute()
 const router = useRouter()

@@ -227,6 +227,15 @@
         <a-form-item label="备注"><a-textarea v-model:value="blForm.remarks" :rows="2" /></a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 评价记录 -->
+    <a-card v-if="order" size="small" style="margin-top: 16px">
+      <EvaluationPanel
+        target-type="formal_order"
+        :target-id="order.id"
+        :subject-id="order.salesperson.id"
+      />
+    </a-card>
   </div>
 </template>
 
@@ -236,6 +245,7 @@ import { useRoute } from 'vue-router'
 import { message, Empty } from 'ant-design-vue'
 import { formalOrdersApi } from '@/api/inquiries'
 import { useAuthStore } from '@/stores/auth'
+import EvaluationPanel from '@/components/EvaluationPanel.vue'
 
 const route = useRoute()
 const auth = useAuthStore()

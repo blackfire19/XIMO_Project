@@ -63,6 +63,7 @@ class FollowUpOut(BaseModel):
     id: int
     content: str
     is_effective: bool
+    created_by: int
     created_at: str
     images: list[FollowUpImageOut] = []
     model_config = {"from_attributes": True}

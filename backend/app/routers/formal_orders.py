@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
@@ -18,6 +18,7 @@ from app.schemas.inquiry import (
     FormalOrderUpdate,
     FormalOrderStatusUpdate,
     FormalOrderListItem,
+    FormalOrderPage,
     FormalOrderOut,
     OrderFileOut,
     BLCreate,
@@ -113,7 +114,7 @@ def convert_to_order(
     if not salesperson or not salesperson.salesperson_code:
         raise HTTPException(status_code=400, detail="询价单业务员未分配业务员编码，无法生成订单编号")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     for _attempt in range(5):
         order = FormalOrder(
             so_number=_gen_so_number(db, salesperson),
@@ -144,7 +145,7 @@ def convert_to_order(
     return order
 
 
-@router.get("/", response_model=list[FormalOrderListItem])
+@router.get("/", response_model=FormalOrderPage)
 def list_orders(
     customer_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
@@ -166,12 +167,14 @@ def list_orders(
         q = q.filter(FormalOrder.status != "completed")
     if so_number:
         q = q.filter(FormalOrder.so_number.ilike(f"%{so_number}%"))
-    return (
+    total = q.count()
+    items = (
         q.order_by(FormalOrder.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
+    return FormalOrderPage(total=total, page=page, page_size=page_size, items=items)
 
 
 @router.get("/{order_id}", response_model=FormalOrderOut)
@@ -204,7 +207,7 @@ def update_order(
         val = getattr(body, field)
         if val is not None:
             setattr(order, field, val)
-    order.updated_at = datetime.utcnow().isoformat()
+    order.updated_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     db.commit()
     db.refresh(order)
     return order
@@ -229,7 +232,7 @@ def update_status(
             detail=f"状态流转不合法：{STATUS_LABELS.get(order.status, order.status)} → {STATUS_LABELS.get(body.status, body.status)}",
         )
     order.status = body.status
-    order.updated_at = datetime.utcnow().isoformat()
+    order.updated_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     db.commit()
     db.refresh(order)
     return order
@@ -271,7 +274,7 @@ async def upload_order_file(
         file_name=original_name,
         file_path=rel_path,
         uploaded_by=current_user.id,
-        uploaded_at=datetime.utcnow().isoformat(),
+        uploaded_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
     )
     db.add(rec)
     db.commit()
@@ -319,7 +322,7 @@ def add_bl(
     if order.bls:
         raise HTTPException(status_code=400, detail="该订单已有提单，一个订单仅对应一张提单")
 
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     bl = ShipmentBL(
         order_id=order_id,
         ship_type=body.ship_type,
@@ -366,7 +369,7 @@ def update_bl(
         val = getattr(body, field)
         if val is not None:
             setattr(bl, field, val)
-    bl.updated_at = datetime.utcnow().isoformat()
+    bl.updated_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     db.commit()
     db.refresh(bl)
     return bl
