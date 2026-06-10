@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session, aliased
@@ -70,6 +70,8 @@ def _batch_check_downgrade(customers: list, db: Session) -> None:
 
     changed = False
     for customer in customers:
+        if customer.follow_freq not in FREQ_DAYS:
+            continue
         if customer.follow_freq == "monthly":
             continue
         cycle_days = FREQ_DAYS[customer.follow_freq]
@@ -83,7 +85,10 @@ def _batch_check_downgrade(customers: list, db: Session) -> None:
         days_elapsed = (now - baseline).total_seconds() / 86400
         missed_cycles = int(days_elapsed / cycle_days)
         if missed_cycles >= 3:
-            idx = FREQ_ORDER.index(customer.follow_freq)
+            try:
+                idx = FREQ_ORDER.index(customer.follow_freq)
+            except ValueError:
+                continue
             if idx < len(FREQ_ORDER) - 1:
                 customer.follow_freq = FREQ_ORDER[idx + 1]
                 customer.consecutive_miss_cycles = 0
@@ -111,6 +116,7 @@ class FollowUpListItem(BaseModel):
     id: int
     customer_id: int
     customer_name: str
+    contact_name: Optional[str] = None
     content: str
     is_effective: bool
     created_at: str
@@ -131,15 +137,15 @@ def list_all_follow_ups(
     keyword: Optional[str] = None,
     today: bool = False,
     effective: Optional[bool] = None,
-    page: int = 1,
-    page_size: int = 10,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
     role = current.role.name
     Creator = aliased(User)
     q = (
-        db.query(FollowUpRecord, Customer.company_name, Creator.full_name)
+        db.query(FollowUpRecord, Customer.company_name, Customer.contact_name, Creator.full_name)
         .join(Customer, FollowUpRecord.customer_id == Customer.id)
         .join(Creator, FollowUpRecord.created_by == Creator.id)
     )
@@ -168,13 +174,14 @@ def list_all_follow_ups(
             id=r.id,
             customer_id=r.customer_id,
             customer_name=company_name,
+            contact_name=contact_name,
             content=r.content,
             is_effective=r.is_effective,
             created_at=r.created_at,
             creator_name=creator_name,
             created_by=r.created_by,
         )
-        for r, company_name, creator_name in rows
+        for r, company_name, contact_name, creator_name in rows
     ]
     return FollowUpListPage(total=total, page=page, page_size=page_size, items=items)
 
@@ -194,8 +201,8 @@ def list_customers(
     country: Optional[str] = None,
     contact_name: Optional[str] = None,
     contact: Optional[str] = None,
-    page: int = 1,
-    page_size: int = 10,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):

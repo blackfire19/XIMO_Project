@@ -19,7 +19,17 @@
           <a-input v-model:value="search.company_name" placeholder="公司名称" allow-clear @pressEnter="doSearch" />
         </a-col>
         <a-col :span="5">
-          <a-input v-model:value="search.country" placeholder="国家" allow-clear @pressEnter="doSearch" />
+          <a-select
+            v-model:value="search.country"
+            show-search
+            allow-clear
+            placeholder="国家"
+            :filter-option="false"
+            :options="searchCountryOptions"
+            style="width: 100%"
+            @search="onSearchCountrySearch"
+            @change="doSearch"
+          />
         </a-col>
         <a-col :span="5">
           <a-input v-model:value="search.contact_name" placeholder="联系人" allow-clear @pressEnter="doSearch" />
@@ -54,7 +64,7 @@
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'company_name'">
-          <a @click.stop="goDetail(record.id)">{{ record.company_name }}</a>
+          <a @click.stop="goDetail(record.id)">{{ fmtCustomer(record.contact_name, record.company_name) }}</a>
         </template>
 
         <template v-else-if="column.key === 'grade'">
@@ -95,7 +105,14 @@
         </a-form-item>
 
         <a-form-item label="国家" name="country">
-          <a-input v-model:value="form.country" />
+          <a-select
+            v-model:value="form.country"
+            show-search
+            placeholder="搜索国家（中文或英文）"
+            :filter-option="false"
+            :options="countryOptions"
+            @search="onCountrySearch"
+          />
         </a-form-item>
 
         <a-form-item label="联系人" name="contact_name">
@@ -144,8 +161,20 @@ import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { customersApi } from '@/api/customers'
+import { fmtCustomer } from '@/utils/format'
+import { filterCountries } from '@/utils/countries'
 
 const TRADE_TERMS = ['EXW', 'FOB', 'CFR', 'CIF', 'DAP', 'DDP']
+const countryOptions = ref(filterCountries(''))
+const searchCountryOptions = ref(filterCountries(''))
+
+function onCountrySearch(val) {
+  countryOptions.value = filterCountries(val)
+}
+
+function onSearchCountrySearch(val) {
+  searchCountryOptions.value = filterCountries(val)
+}
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -175,7 +204,7 @@ const form = reactive({
 
 const rules = {
   company_name: [{ required: true, message: '请输入公司名称' }],
-  country: [{ required: true, message: '请输入国家' }],
+  country: [{ required: true, message: '请选择国家' }],
   contact_name: [{ required: true, message: '请输入联系人' }],
 }
 
@@ -242,6 +271,7 @@ function resetSearch() {
   search.country = ''
   search.contact_name = ''
   search.contact = ''
+  searchCountryOptions.value = filterCountries('')
   loadData(1)
 }
 

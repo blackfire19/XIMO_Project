@@ -25,6 +25,22 @@ def list_users(
     return db.query(User).order_by(User.id).all()
 
 
+@router.get("/salespersons", response_model=list[UserOut])
+def list_salespersons(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("super_admin", "boss", "finance")),
+):
+    """供财务/老板筛选用：返回所有在职业务员"""
+    from app.models.user import Role
+    return (
+        db.query(User)
+        .join(Role, User.role_id == Role.id)
+        .filter(Role.name == "salesperson", User.is_active == True)
+        .order_by(User.full_name)
+        .all()
+    )
+
+
 @router.post("/", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def create_user(
     body: UserCreate,
@@ -77,11 +93,16 @@ def update_user(
             raise HTTPException(status_code=400, detail="角色不存在")
         user.role_id = body.role_id
 
+    # 以最终角色为基准做校验
     target_role = db.get(Role, user.role_id)
     if target_role.name == "salesperson":
         code = body.salesperson_code if body.salesperson_code is not None else user.salesperson_code
         if not code:
             raise HTTPException(status_code=400, detail="业务员必须指定业务员编码")
+    else:
+        # 角色改为非业务员时，自动清空编码
+        if body.role_id is not None:
+            user.salesperson_code = None
 
     if body.salesperson_code is not None:
         if body.salesperson_code:

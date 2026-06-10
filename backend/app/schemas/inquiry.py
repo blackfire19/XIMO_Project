@@ -7,6 +7,7 @@ from datetime import date
 class CustomerBrief(BaseModel):
     id: int
     company_name: str
+    contact_name: Optional[str] = None
     country: str
     model_config = {"from_attributes": True}
 
@@ -191,6 +192,8 @@ class FormalOrderListItem(BaseModel):
     est_production_date: Optional[date] = None
     status: str
     created_at: str
+    profit: Optional[float] = None
+    salary_calculated: Optional[bool] = None
     model_config = {"from_attributes": True}
 
 
@@ -199,6 +202,7 @@ class FormalOrderPage(BaseModel):
     page: int
     page_size: int
     items: list[FormalOrderListItem]
+    profit_total: Optional[float] = None
 
 
 class FormalOrderOut(BaseModel):
@@ -216,4 +220,6 @@ class FormalOrderOut(BaseModel):
     files: list[OrderFileOut] = []
     bls: list[BLOut] = []
     inquiry_files: list[InquiryFileOut] = []
+    profit: Optional[float] = None
+    salary_calculated: Optional[bool] = None
     model_config = {"from_attributes": True}

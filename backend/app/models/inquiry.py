@@ -70,6 +70,19 @@ class FormalOrder(Base):
     salesperson: Mapped["User"] = relationship(foreign_keys=[salesperson_id])  # type: ignore
     files: Mapped[list["OrderFile"]] = relationship(back_populates="order", cascade="all, delete-orphan")
     bls: Mapped[list["ShipmentBL"]] = relationship(back_populates="order", cascade="all, delete-orphan")
+    accounting_record: Mapped["AccountingRecord | None"] = relationship(  # type: ignore
+        "AccountingRecord", foreign_keys="AccountingRecord.order_id", back_populates=None, uselist=False
+    )
+
+    @property
+    def profit(self):
+        rec = self.accounting_record
+        return float(rec.profit) if rec and rec.profit is not None else None
+
+    @property
+    def salary_calculated(self):
+        rec = self.accounting_record
+        return rec.salary_calculated if rec else None
 
     @property
     def inquiry_files(self) -> list["InquiryFile"]:

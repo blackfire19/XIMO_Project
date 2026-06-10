@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.constants import FREQ_DAYS
 from app.core.deps import get_current_user, require_roles
 from app.database import get_db
+from app.models.accounting import AccountingRecord
 from app.models.customer import Customer, FollowUpRecord
 from app.models.inquiry import FormalOrder, ShipmentBL
 from app.models.user import User
@@ -41,12 +42,13 @@ def boss_dashboard(
     creator_ids = {r.created_by for r in effective_records}
     customer_ids = {r.customer_id for r in effective_records}
     creators = {u.id: u.full_name for u in db.query(User).filter(User.id.in_(creator_ids)).all()} if creator_ids else {}
-    customers_map = {c.id: c.company_name for c in db.query(Customer).filter(Customer.id.in_(customer_ids)).all()} if customer_ids else {}
+    customers_map = {c.id: c for c in db.query(Customer).filter(Customer.id.in_(customer_ids)).all()} if customer_ids else {}
     follow_summary = [
         {
             "id": r.id,
             "customer_id": r.customer_id,
-            "customer_name": customers_map.get(r.customer_id, f"客户 #{r.customer_id}"),
+            "customer_name": customers_map[r.customer_id].company_name if r.customer_id in customers_map else f"客户 #{r.customer_id}",
+            "contact_name": customers_map[r.customer_id].contact_name if r.customer_id in customers_map else None,
             "content": r.content,
             "created_by": r.created_by,
             "creator_name": creators.get(r.created_by, ""),
@@ -190,4 +192,51 @@ def salesperson_dashboard(
         "due_today_customers": due_today,
         "today_follow_count": today_follow_count,
         "active_orders": active_orders,
+    }
+
+
+@router.get("/finance")
+def finance_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles("finance", "super_admin")),
+):
+    all_records = db.query(AccountingRecord).all()
+    accounted_order_ids = {r.order_id for r in all_records}
+    salary_pending_ids = {r.order_id for r in all_records if not r.salary_calculated}
+
+    completed_orders = (
+        db.query(FormalOrder)
+        .filter(FormalOrder.status == "completed")
+        .order_by(FormalOrder.updated_at.desc())
+        .all()
+    )
+    pending_accounting = [o for o in completed_orders if o.id not in accounted_order_ids]
+    accounted = [o for o in completed_orders if o.id in accounted_order_ids]
+
+    # 待发放工资：已记账但 salary_calculated=False，按记账时间排序
+    record_map = {r.order_id: r for r in all_records}
+    salary_pending_orders = sorted(
+        [o for o in completed_orders if o.id in salary_pending_ids],
+        key=lambda o: record_map[o.id].recorded_at,
+        reverse=True,
+    )
+
+    def _order_brief(o: FormalOrder, with_recorded_at: bool = False) -> dict:
+        d = {
+            "id": o.id,
+            "so_number": o.so_number,
+            "customer_id": o.customer_id,
+            "updated_at": str(o.updated_at),
+        }
+        if with_recorded_at and o.id in record_map:
+            d["recorded_at"] = str(record_map[o.id].recorded_at)
+            d["profit"] = float(record_map[o.id].profit) if record_map[o.id].profit is not None else None
+        return d
+
+    return {
+        "pending_accounting_count": len(pending_accounting),
+        "accounted_count": len(accounted),
+        "salary_pending_count": len(salary_pending_orders),
+        "pending_orders": [_order_brief(o) for o in pending_accounting[:5]],
+        "salary_pending_orders": [_order_brief(o, with_recorded_at=True) for o in salary_pending_orders[:5]],
     }

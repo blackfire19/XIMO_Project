@@ -25,6 +25,7 @@ from app.config import settings
 router = APIRouter(prefix="/inquiries", tags=["询价单"])
 
 INQUIRY_DOC_TYPES = {"pricing_sheet", "pi", "freight_quote"}
+ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".xlsx", ".xls", ".docx", ".doc"}
 
 
 # ── 权限 ───────────────────────────────────────────────────
@@ -185,6 +186,8 @@ def set_deposit(
         raise HTTPException(status_code=400, detail="已失效的询价单无法登记定金")
     if inq.status == "converted":
         raise HTTPException(status_code=400, detail="已转订单的询价单无法修改定金")
+    if inq.status == "deposit_received":
+        raise HTTPException(status_code=400, detail="定金已登记，如需修改请联系管理员")
 
     # 必须已上传核价单和 PI 的当前版本，才能登记定金
     current_types = {
@@ -259,10 +262,13 @@ async def upload_inquiry_file(
     for f in existing:
         f.is_current = False
 
+    original_name = file.filename or "file"
+    ext = os.path.splitext(original_name)[1].lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"不允许的文件类型，请上传 PDF、图片或 Office 文档")
+
     upload_dir = os.path.join(settings.UPLOAD_DIR, "inquiry_files", str(inquiry_id))
     os.makedirs(upload_dir, exist_ok=True)
-    original_name = file.filename or "file"
-    ext = os.path.splitext(original_name)[1]
     saved_name = f"{uuid.uuid4().hex}{ext}"
     saved_path = os.path.join(upload_dir, saved_name)
     content = await file.read()
@@ -299,15 +305,17 @@ def delete_inquiry_file(
         raise HTTPException(status_code=404, detail="询价单不存在")
     if not _can_edit(current_user, inq):
         raise HTTPException(status_code=403, detail="权限不足")
+    if inq.status != "active":
+        raise HTTPException(status_code=400, detail="单据状态已变更，不允许删除附件")
     rec = db.get(InquiryFile, file_id)
     if not rec or rec.inquiry_id != inquiry_id:
         raise HTTPException(status_code=404, detail="文件不存在")
+    if not rec.is_current:
+        raise HTTPException(status_code=400, detail="只允许删除最新版本")
 
-    full_path = os.path.join(settings.UPLOAD_DIR, rec.file_path)
-    if os.path.exists(full_path):
-        os.remove(full_path)
     was_current = rec.is_current
     doc_type = rec.doc_type
+    full_path = os.path.join(settings.UPLOAD_DIR, rec.file_path)
     db.delete(rec)
     db.flush()
     # 若删的是当前版本，将同类型最新版本重新设为当前
@@ -321,3 +329,6 @@ def delete_inquiry_file(
         if latest:
             latest.is_current = True
     db.commit()
+    # commit 成功后再删磁盘文件，避免 commit 失败时文件已删但记录仍在
+    if os.path.exists(full_path):
+        os.remove(full_path)

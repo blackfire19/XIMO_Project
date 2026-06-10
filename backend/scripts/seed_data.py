@@ -19,6 +19,7 @@ ROLES = [
     {"name": "boss",        "label": "老板"},
     {"name": "salesperson", "label": "业务员"},
     {"name": "purchaser",   "label": "采购员"},
+    {"name": "finance",     "label": "财务"},
 ]
 
 ADMIN_USERNAME = "admin"

@@ -58,7 +58,7 @@
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'customer_name'">
           <a @click="router.push(`/customers/${record.customer_id}`)">
-            {{ record.customer_name }}
+            {{ fmtCustomer(record.contact_name, record.customer_name) }}
           </a>
         </template>
 
@@ -125,6 +125,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { SearchOutlined } from '@ant-design/icons-vue'
 import { customersApi } from '@/api/customers'
+import { fmtCustomer } from '@/utils/format'
 import { evaluationsApi } from '@/api/evaluations'
 import { useAuthStore } from '@/stores/auth'
 

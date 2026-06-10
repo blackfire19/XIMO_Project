@@ -90,7 +90,7 @@
                   <a-list-item-meta>
                     <template #title>
                       <router-link :to="`/customers/${item.customer_id}`">
-                        {{ item.customer_name }}
+                        {{ fmtCustomer(item.contact_name, item.customer_name) }}
                       </router-link>
                       <span class="creator-tag">{{ item.creator_name }}</span>
                     </template>
@@ -235,7 +235,7 @@
                 <a-list-item>
                   <a-list-item-meta>
                     <template #title>
-                      <router-link :to="`/customers/${item.id}`">{{ item.company_name }}</router-link>
+                      <router-link :to="`/customers/${item.id}`">{{ fmtCustomer(item.contact_name, item.company_name) }}</router-link>
                     </template>
                     <template #description>
                       {{ item.country }} · {{ GRADE_LABELS[item.grade] }} · {{ FREQ_LABELS[item.follow_freq] }}
@@ -301,6 +301,83 @@
           <div ref="evalChartRef" style="height: 260px" />
         </template>
       </a-card>
+    </template>
+
+    <!-- ====== 财务看板 ====== -->
+    <template v-else-if="auth.hasRole('finance')">
+      <a-row :gutter="16" class="stat-row">
+        <a-col :span="8">
+          <a-card class="stat-card">
+            <a-statistic
+              title="待记账订单"
+              :value="financeData.pending_accounting_count ?? 0"
+              :value-style="{ color: '#fa8c16', cursor: 'pointer' }"
+              @click="$router.push('/formal-orders?has_accounting=false')"
+            />
+          </a-card>
+        </a-col>
+        <a-col :span="8">
+          <a-card class="stat-card">
+            <a-statistic
+              title="已记账订单"
+              :value="financeData.accounted_count ?? 0"
+              :value-style="{ color: '#52c41a', cursor: 'pointer' }"
+              @click="$router.push('/formal-orders?has_accounting=true')"
+            />
+          </a-card>
+        </a-col>
+        <a-col :span="8">
+          <a-card class="stat-card">
+            <a-statistic
+              title="待发放工资"
+              :value="financeData.salary_pending_count ?? 0"
+              :value-style="{ color: '#1677ff', cursor: 'pointer' }"
+              @click="$router.push('/formal-orders?has_accounting=true&salary_calculated=false')"
+            />
+          </a-card>
+        </a-col>
+      </a-row>
+
+      <a-row :gutter="16" style="margin-top: 16px">
+        <a-col :span="12">
+          <a-card size="small">
+            <template #title>待记账订单</template>
+            <template #extra>
+              <a-button type="link" size="small" @click="$router.push('/formal-orders?has_accounting=false')">查看全部</a-button>
+            </template>
+            <a-empty v-if="!financeData.pending_orders?.length" description="暂无待记账订单" />
+            <a-table
+              v-else
+              :data-source="financeData.pending_orders"
+              :columns="financeOrderColumns"
+              :pagination="false"
+              size="small"
+              row-key="id"
+              :custom-row="(record) => ({ onClick: () => $router.push(`/formal-orders/${record.id}`) })"
+              :row-class-name="() => 'clickable-row'"
+            />
+          </a-card>
+        </a-col>
+        <a-col :span="12">
+          <a-card size="small">
+            <template #title>待发放工资订单</template>
+            <template #extra>
+              <a-button type="link" size="small" @click="$router.push('/formal-orders?has_accounting=true&salary_calculated=false')">查看全部</a-button>
+            </template>
+            <a-empty v-if="!financeData.salary_pending_orders?.length" description="暂无待发放工资订单" />
+            <a-table
+              v-else
+              :data-source="financeData.salary_pending_orders"
+              :columns="financeSalaryColumns"
+              :pagination="false"
+              size="small"
+              row-key="id"
+              :custom-row="(record) => ({ onClick: () => $router.push(`/formal-orders/${record.id}`) })"
+              :row-class-name="() => 'clickable-row'"
+            />
+          </a-card>
+        </a-col>
+      </a-row>
     </template>
 
     <!-- 采购员看板（仅公告） -->
@@ -376,7 +453,7 @@
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'company_name'">
             <a @click="$router.push(`/customers/${record.id}`); showAllDueToday = false">
-              {{ record.company_name }}
+              {{ fmtCustomer(record.contact_name, record.company_name) }}
             </a>
           </template>
           <template v-else-if="column.key === 'action'">
@@ -449,12 +526,14 @@ import { dashboardApi } from '@/api/dashboard'
 import { announcementsApi } from '@/api/announcements'
 import { evaluationsApi } from '@/api/evaluations'
 import * as echarts from 'echarts'
+import { fmtCustomer } from '@/utils/format'
 
 const auth = useAuthStore()
 
 const announcements = ref([])
 const bossData = ref({})
 const salesData = ref({})
+const financeData = ref({})
 
 const showPublish = ref(false)
 const newContent = ref('')
@@ -471,6 +550,33 @@ const evalChartRef = ref(null)
 const evalStatsEmpty = ref(true)
 const evalAvgList = ref([])   // [{ subject_name, avg_score, count }]
 let evalChart = null
+
+const financeOrderColumns = [
+  { title: '订单号', dataIndex: 'so_number', key: 'so_number' },
+  {
+    title: '完结时间',
+    dataIndex: 'updated_at',
+    key: 'updated_at',
+    customRender: ({ text }) => text ? String(text).slice(0, 10) : '-',
+  },
+]
+
+const financeSalaryColumns = [
+  { title: '订单号', dataIndex: 'so_number', key: 'so_number' },
+  {
+    title: '记账时间',
+    dataIndex: 'recorded_at',
+    key: 'recorded_at',
+    customRender: ({ text }) => text ? String(text).slice(0, 10) : '-',
+  },
+  {
+    title: '利润（CNY）',
+    dataIndex: 'profit',
+    key: 'profit',
+    align: 'right',
+    customRender: ({ text }) => text != null ? text.toFixed(2) : '—',
+  },
+]
 
 const ORDER_STATUS_LABELS = {
   confirmed: '已确认',
@@ -518,10 +624,10 @@ const filteredFollowSummary = computed(() => {
 const followSummaryColumns = [
   {
     title: '客户',
-    dataIndex: 'customer_name',
     key: 'customer_name',
     width: 140,
     ellipsis: true,
+    customRender: ({ record }) => fmtCustomer(record.contact_name, record.customer_name),
   },
   { title: '创建人', dataIndex: 'creator_name', key: 'creator_name', width: 80 },
   { title: '跟进内容', dataIndex: 'content', key: 'content', ellipsis: true },
@@ -587,7 +693,11 @@ function openFollowSummaryModal() {
 }
 
 const dueTodayColumns = [
-  { title: '公司名称', dataIndex: 'company_name', key: 'company_name' },
+  {
+    title: '公司名称',
+    key: 'company_name',
+    customRender: ({ record }) => fmtCustomer(record.contact_name, record.company_name),
+  },
   { title: '国家', dataIndex: 'country', key: 'country', width: 100 },
   { title: '联系人', dataIndex: 'contact_name', key: 'contact_name', width: 100 },
   {
@@ -645,6 +755,11 @@ async function loadDashboard() {
     try {
       const res = await dashboardApi.salesperson()
       salesData.value = res.data
+    } catch {}
+  } else if (auth.hasRole('finance')) {
+    try {
+      const res = await dashboardApi.finance()
+      financeData.value = res.data
     } catch {}
   }
 }

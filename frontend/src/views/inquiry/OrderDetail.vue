@@ -15,13 +15,18 @@
         </a-popconfirm>
       </template>
       <a-descriptions size="small" :column="3">
-        <a-descriptions-item label="客户">{{ order.customer.company_name }}</a-descriptions-item>
+        <a-descriptions-item label="客户">{{ fmtCustomer(order.customer?.contact_name, order.customer?.company_name) }}</a-descriptions-item>
         <a-descriptions-item label="业务员">{{ order.salesperson.full_name }}</a-descriptions-item>
         <a-descriptions-item label="创建时间">{{ (order.created_at || '').slice(0,10) }}</a-descriptions-item>
         <a-descriptions-item v-if="!order.is_stock" label="预计生产完成">
           {{ order.est_production_date || '未设置' }}
         </a-descriptions-item>
         <a-descriptions-item label="备注">{{ order.remarks || '—' }}</a-descriptions-item>
+        <a-descriptions-item v-if="order.profit != null" label="本单利润（CNY）">
+          <span :style="{ fontWeight: 700, color: order.profit >= 0 ? '#52c41a' : '#ff4d4f' }">
+            {{ order.profit.toFixed(2) }}
+          </span>
+        </a-descriptions-item>
       </a-descriptions>
     </a-page-header>
 
@@ -168,13 +173,16 @@
     <!-- 补充附件（出运锁定后显示，用于补充说明） -->
     <a-card v-if="locked" size="small" title="补充附件（补充说明，不受出运锁定限制）" style="margin-top:8px">
       <template #extra>
-        <a-upload
-          v-if="canEdit"
-          :before-upload="(f) => beforeUpload(f, 'supplement')"
-          :show-upload-list="false"
+        <a-popconfirm
+          v-if="canSupplement"
+          title="补充附件上传后不可删除，确认上传？"
+          ok-text="确认上传"
+          cancel-text="取消"
+          @confirm="triggerSupplementUpload"
         >
           <a-button type="link" size="small">上传补充附件</a-button>
-        </a-upload>
+        </a-popconfirm>
+        <input ref="supplementInputRef" type="file" style="display:none" @change="onSupplementFileChange" />
       </template>
       <a-empty v-if="!filesByType.supplement || filesByType.supplement.length === 0"
         :image="emptyImage" description="暂无补充附件" />
@@ -183,18 +191,13 @@
           <a-list-item>
             <a :href="`/uploads/${item.file_path}`" target="_blank">{{ item.file_name }}</a>
             <span style="color:#999; margin-left:12px">{{ (item.uploaded_at || '').slice(0,10) }}</span>
-            <template #actions>
-              <a-popconfirm v-if="canEdit" title="删除？" @confirm="delFile(item.id)">
-                <a style="color:#ff4d4f">删除</a>
-              </a-popconfirm>
-            </template>
           </a-list-item>
         </template>
       </a-list>
     </a-card>
 
     <!-- 提单 编辑/创建 modal -->
-    <a-modal v-model:open="blOpen" :title="blEditing ? '编辑提单' : '创建提单'" width="640" :confirm-loading="saving" @ok="submitBL">
+    <a-modal v-model:open="blOpen" :title="blEditing ? '编辑提单' : '创建提单'" width="640" :confirm-loading="saving" @ok="submitBL" @cancel="blForm = null; blEditing = false">
       <a-form layout="vertical">
         <a-form-item label="运输方式">
           <a-radio-group v-model:value="blForm.ship_type">
@@ -228,6 +231,100 @@
       </a-form>
     </a-modal>
 
+    <!-- 财务记账（仅财务角色，且仅已完结订单） -->
+    <a-card
+      v-if="order && order.status === 'completed' && auth.hasRole('finance')"
+      size="small"
+      title="财务记账"
+      style="margin-top: 16px"
+    >
+      <template #extra>
+        <a-space>
+          <template v-if="accountingRecord">
+            <a-tag v-if="accountingRecord.salary_calculated" color="green" style="font-size:13px; padding:3px 10px">
+              已发放工资 ✓
+            </a-tag>
+            <a-popconfirm
+              v-else
+              title="确认标记为已发放工资？一旦标记将无法撤销。"
+              ok-text="确认标记"
+              cancel-text="取消"
+              @confirm="toggleSalary"
+            >
+              <a-button size="small" type="primary" ghost>标记工资发放</a-button>
+            </a-popconfirm>
+          </template>
+          <a-button v-if="!salaryLocked" type="primary" size="small" @click="openAccounting">
+            {{ accountingRecord ? '编辑记账' : '记录利润' }}
+          </a-button>
+        </a-space>
+      </template>
+
+      <a-empty v-if="!accountingRecord" description="暂无记账记录" />
+      <a-descriptions v-else size="small" :column="3" bordered>
+        <a-descriptions-item label="本单利润（CNY）">
+          <span :style="{ fontWeight: 700, color: accountingRecord.profit == null ? '#999' : accountingRecord.profit >= 0 ? '#52c41a' : '#ff4d4f' }">
+            {{ accountingRecord.profit != null ? accountingRecord.profit.toFixed(2) : '—' }}
+          </span>
+        </a-descriptions-item>
+        <a-descriptions-item label="工资发放">
+          <a-tag :color="accountingRecord.salary_calculated ? 'green' : 'default'">
+            {{ accountingRecord.salary_calculated ? '已发放' : '未发放' }}
+          </a-tag>
+        </a-descriptions-item>
+        <a-descriptions-item label="记账人">{{ accountingRecord.recorder_name }}</a-descriptions-item>
+        <a-descriptions-item label="记账时间">{{ (accountingRecord.recorded_at || '').slice(0, 10) }}</a-descriptions-item>
+        <a-descriptions-item v-if="accountingRecord.notes" label="备注" :span="3">{{ accountingRecord.notes }}</a-descriptions-item>
+        <a-descriptions-item label="附件" :span="3">
+          <template v-if="accountingRecord.file_name">
+            <a :href="`/uploads/${accountingRecord.file_path}`" target="_blank">{{ accountingRecord.file_name }}</a>
+            <a-popconfirm title="删除附件？" @confirm="deleteAccountingFile">
+              <a style="color:#ff4d4f; margin-left:12px">删除</a>
+            </a-popconfirm>
+          </template>
+          <span v-else style="color:#bbb">无附件</span>
+        </a-descriptions-item>
+      </a-descriptions>
+    </a-card>
+
+    <!-- 记账 Modal -->
+    <a-modal
+      v-model:open="accountingOpen"
+      title="财务记账"
+      :confirm-loading="accountingSaving"
+      ok-text="保存"
+      cancel-text="取消"
+      @ok="submitAccounting"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="本单利润（CNY）" required>
+          <a-input-number
+            v-model:value="accountingForm.profit"
+            style="width:100%"
+            :precision="2"
+            placeholder="可为负数"
+            addon-after="CNY"
+          />
+        </a-form-item>
+        <a-form-item label="备注">
+          <a-textarea v-model:value="accountingForm.notes" :rows="3" placeholder="选填" />
+        </a-form-item>
+        <a-form-item label="上传凭证文件（选填）">
+          <a-upload
+            :before-upload="onPickFile"
+            :file-list="accountingFileList"
+            :max-count="1"
+            @remove="accountingFileList = []"
+          >
+            <a-button size="small">选择文件</a-button>
+          </a-upload>
+          <div v-if="accountingRecord?.file_name && accountingFileList.length === 0" style="margin-top:4px;color:#999;font-size:12px">
+            已有附件：{{ accountingRecord.file_name }}（不重新上传则保留原附件）
+          </div>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
     <!-- 评价记录 -->
     <a-card v-if="order" size="small" style="margin-top: 16px">
       <EvaluationPanel
@@ -244,7 +341,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { message, Empty } from 'ant-design-vue'
 import { formalOrdersApi } from '@/api/inquiries'
+import { accountingApi } from '@/api/accounting'
 import { useAuthStore } from '@/stores/auth'
+import { fmtCustomer } from '@/utils/format'
 import EvaluationPanel from '@/components/EvaluationPanel.vue'
 
 const route = useRoute()
@@ -269,16 +368,28 @@ const DOC_DEFS = [
   { key: 'export_permit', label: '出口许可证' },
   { key: 'inspection', label: '验货照片' },
   { key: 'packing', label: '装箱照片' },
+  { key: 'ocean_bl', label: '海运提单' },
 ]
 
 const order = ref(null)
 const bl = computed(() => order.value?.bls?.[0] || null)
 
+const salaryLocked = computed(() => !!order.value?.salary_calculated)
+
 const canEdit = computed(() => {
   if (!order.value) return false
-  if (auth.hasRole('super_admin')) return true
-  if (auth.hasRole('salesperson')) return order.value.salesperson.id === auth.user?.id
+  if (salaryLocked.value) return false        // 工资已发放，全员锁定
+  if (auth.hasRole('super_admin')) return order.value.status !== 'completed'
+  if (auth.hasRole('salesperson')) return order.value.salesperson.id === auth.user?.id && order.value.status !== 'completed'
   return false
+})
+
+// 核算工资后，非财务仍可上传/删除补充附件
+const canSupplement = computed(() => {
+  if (!order.value) return false
+  if (auth.hasRole('finance')) return false   // 财务核算后完全锁定
+  if (salaryLocked.value) return !auth.hasRole('finance')
+  return canEdit.value
 })
 
 // 线性流转；现货订单跳过「生产中」
@@ -377,9 +488,93 @@ const reminder = computed(() => {
   }
 })
 
+// ── 财务记账 ──
+const accountingRecord = ref(null)
+const accountingOpen = ref(false)
+const accountingSaving = ref(false)
+const accountingForm = ref({ profit: null, notes: '' })
+const accountingFileList = ref([])
+
+async function loadAccounting(orderId) {
+  if (!auth.hasRole('finance')) return
+  const res = await accountingApi.get(orderId)
+  accountingRecord.value = res.status === 404 ? null : res.data
+}
+
+function openAccounting() {
+  const r = accountingRecord.value
+  accountingForm.value = {
+    profit: r?.profit ?? null,
+    notes: r?.notes ?? '',
+  }
+  accountingFileList.value = []
+  accountingOpen.value = true
+}
+
+function onPickFile(file) {
+  accountingFileList.value = [file]
+  return false
+}
+
+async function submitAccounting() {
+  const f = accountingForm.value
+  if (f.profit === null || f.profit === undefined) {
+    message.warning('请填写本单利润')
+    return
+  }
+  accountingSaving.value = true
+  try {
+    const fd = new FormData()
+    fd.append('profit', Math.round(f.profit * 100) / 100)
+    if (f.notes) fd.append('notes', f.notes)
+    if (accountingFileList.value.length > 0) fd.append('file', accountingFileList.value[0])
+    await accountingApi.save(order.value.id, fd)
+    message.success('记账记录已保存')
+    accountingOpen.value = false
+    await loadAccounting(order.value.id)
+  } catch {
+    // 拦截器已提示
+  } finally {
+    accountingSaving.value = false
+  }
+}
+
+async function deleteAccountingFile() {
+  await accountingApi.deleteFile(order.value.id)
+  message.success('附件已删除')
+  await loadAccounting(order.value.id)
+}
+
+async function toggleSalary() {
+  const res = await accountingApi.toggleSalary(order.value.id)
+  accountingRecord.value = res.data
+  message.success(res.data.salary_calculated ? '已标记为工资发放' : '已取消核算工资标记')
+}
+
+// ── 补充附件（确认后才触发文件选择） ──
+const supplementInputRef = ref(null)
+
+function triggerSupplementUpload() {
+  supplementInputRef.value?.click()
+}
+
+async function onSupplementFileChange(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  e.target.value = ''   // 重置，允许重复选同名文件
+  try {
+    await formalOrdersApi.uploadFile(order.value.id, 'supplement', file)
+    message.success('补充附件上传成功')
+    await load()
+  } catch { /* 拦截器已提示 */ }
+}
+
 async function load() {
   const res = await formalOrdersApi.get(route.params.id)
   order.value = res.data
+  if (res.data.status === 'completed') {
+    await loadAccounting(res.data.id)
+  }
 }
 
 async function advance() {
