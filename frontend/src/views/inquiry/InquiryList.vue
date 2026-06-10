@@ -54,6 +54,13 @@
         <template v-else-if="column.key === 'status'">
           <a-tag :color="STATUS_COLOR[record.status]">{{ STATUS_LABEL[record.status] }}</a-tag>
         </template>
+        <template v-else-if="column.key === 'progress'">
+          <a-tag v-if="record.status === 'deposit_received' || record.status === 'converted'" color="green">已收定金</a-tag>
+          <a-tag v-else-if="record.has_pi" color="purple">已发送PI</a-tag>
+          <a-tag v-else-if="record.has_freight_quote" color="blue">已报价</a-tag>
+          <a-tag v-else-if="record.has_pricing_sheet" color="cyan">已核价</a-tag>
+          <span v-else style="color:#bbb">—</span>
+        </template>
         <template v-else-if="column.key === 'deposit_amount'">
           {{ record.deposit_amount != null ? Number(record.deposit_amount).toLocaleString() : '—' }}
         </template>
@@ -138,6 +145,7 @@ const columns = [
   { title: '客户', key: 'customer' },
   { title: '业务员', key: 'salesperson' },
   { title: '状态', dataIndex: 'status', key: 'status' },
+  { title: '进度', key: 'progress', width: 110 },
   { title: '定金', dataIndex: 'deposit_amount', key: 'deposit_amount', align: 'right' },
   { title: '创建时间', dataIndex: 'created_at', key: 'created_at',
     customRender: ({ text }) => (text || '').slice(0, 10) },

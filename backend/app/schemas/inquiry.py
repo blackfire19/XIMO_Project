@@ -57,8 +57,28 @@ class InquiryListItem(BaseModel):
     status: str
     deposit_amount: Optional[float] = None
     deposit_date: Optional[date] = None
+    has_pricing_sheet: bool = False
+    has_freight_quote: bool = False
+    has_pi: bool = False
     created_at: str
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_orm_with_flags(cls, inq) -> "InquiryListItem":
+        current_types = {f.doc_type for f in inq.files if f.is_current}
+        return cls(
+            id=inq.id,
+            enq_number=inq.enq_number,
+            customer=inq.customer,
+            salesperson=inq.salesperson,
+            status=inq.status,
+            deposit_amount=inq.deposit_amount,
+            deposit_date=inq.deposit_date,
+            has_pricing_sheet="pricing_sheet" in current_types,
+            has_freight_quote="freight_quote" in current_types,
+            has_pi="pi" in current_types,
+            created_at=inq.created_at,
+        )
 
 
 class InquiryPage(BaseModel):
