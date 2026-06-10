@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.deps import get_current_user
 from app.database import get_db
@@ -84,12 +84,18 @@ def list_inquiries(
         q = q.filter(Inquiry.enq_number.ilike(f"%{enq_number}%"))
     total = q.count()
     items = (
-        q.order_by(Inquiry.id.desc())
+        q.options(selectinload(Inquiry.files))
+        .order_by(Inquiry.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
-    return InquiryPage(total=total, page=page, page_size=page_size, items=items)
+    return InquiryPage(
+        total=total,
+        page=page,
+        page_size=page_size,
+        items=[InquiryListItem.from_orm_with_flags(inq) for inq in items],
+    )
 
 
 @router.post("/", response_model=InquiryOut)

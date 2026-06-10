@@ -210,8 +210,8 @@ const reminder = computed(() => {
       title: '进行中 —— 请准备以下文件',
       items: [
         { text: '核价单（必备）', done: hasCurrent('pricing_sheet') },
-        { text: 'PI 形式发票（必备）', done: hasCurrent('pi') },
         { text: '报价单（可选）', done: hasCurrent('freight_quote') },
+        { text: 'PI 形式发票（必备）', done: hasCurrent('pi') },
         { text: '收到定金后点击「登记定金」即可转正式订单', done: false },
       ],
     }
