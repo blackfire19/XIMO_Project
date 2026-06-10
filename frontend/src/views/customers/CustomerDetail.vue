@@ -5,7 +5,7 @@
       <a-space>
         <a-button @click="router.back()">← 返回</a-button>
         <a-typography-title :level="4" style="margin: 0">
-          {{ customer?.company_name }}
+          {{ fmtCustomer(customer?.contact_name, customer?.company_name) }}
         </a-typography-title>
       </a-space>
       <a-button v-if="canEdit" type="primary" ghost @click="openEdit">编辑客户</a-button>
@@ -155,7 +155,14 @@
           <a-input v-model:value="editForm.company_name" />
         </a-form-item>
         <a-form-item label="国家" name="country">
-          <a-input v-model:value="editForm.country" />
+          <a-select
+            v-model:value="editForm.country"
+            show-search
+            placeholder="搜索国家（中文或英文）"
+            :filter-option="false"
+            :options="countryOptions"
+            @search="onCountrySearch"
+          />
         </a-form-item>
         <a-form-item label="联系人" name="contact_name">
           <a-input v-model:value="editForm.contact_name" />
@@ -199,9 +206,16 @@ import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { customersApi } from '@/api/customers'
+import { fmtCustomer } from '@/utils/format'
+import { filterCountries } from '@/utils/countries'
 import EvaluationPanel from '@/components/EvaluationPanel.vue'
 
 const TRADE_TERMS = ['EXW', 'FOB', 'CFR', 'CIF', 'DAP', 'DDP']
+const countryOptions = ref(filterCountries(''))
+
+function onCountrySearch(val) {
+  countryOptions.value = filterCountries(val)
+}
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -241,7 +255,7 @@ const editForm = reactive({
 
 const editRules = {
   company_name: [{ required: true, message: '请输入公司名称' }],
-  country: [{ required: true, message: '请输入国家' }],
+  country: [{ required: true, message: '请选择国家' }],
   contact_name: [{ required: true, message: '请输入联系人' }],
 }
 

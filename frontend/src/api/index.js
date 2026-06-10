@@ -4,15 +4,7 @@ import { message } from 'ant-design-vue'
 export const api = axios.create({
   baseURL: '/api',
   timeout: 15000,
-})
-
-// 请求拦截：自动携带 token
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
+  withCredentials: true, // 携带 httpOnly Cookie，token 不再存于 localStorage
 })
 
 // 响应拦截：统一错误提示
@@ -23,8 +15,6 @@ api.interceptors.response.use(
     const detail = err.response?.data?.detail
 
     if (status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
       window.location.href = '/login'
       return Promise.reject(err)
     }

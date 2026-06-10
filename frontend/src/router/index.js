@@ -56,37 +56,6 @@ const routes = [
         name: 'OrderDetail',
         component: () => import('@/views/inquiry/OrderDetail.vue'),
       },
-      // 旧版询报价 & 订单管理暂时屏蔽，功能重设计中
-      // {
-      //   path: 'pricing-sheets',
-      //   name: 'PricingSheets',
-      //   component: () => import('@/views/pricing/PricingSheetList.vue'),
-      // },
-      // {
-      //   path: 'pricing-sheets/:id',
-      //   name: 'PricingSheetDetail',
-      //   component: () => import('@/views/pricing/PricingSheetDetail.vue'),
-      // },
-      // {
-      //   path: 'quotations',
-      //   name: 'Quotations',
-      //   component: () => import('@/views/quotations/QuotationList.vue'),
-      // },
-      // {
-      //   path: 'quotations/:id',
-      //   name: 'QuotationDetail',
-      //   component: () => import('@/views/quotations/QuotationDetail.vue'),
-      // },
-      // {
-      //   path: 'orders',
-      //   name: 'Orders',
-      //   component: () => import('@/views/orders/OrderList.vue'),
-      // },
-      // {
-      //   path: 'orders/:id',
-      //   name: 'OrderDetail',
-      //   component: () => import('@/views/orders/OrderDetail.vue'),
-      // },
       {
         path: 'settings/users',
         name: 'UserManagement',
@@ -101,11 +70,25 @@ const router = createRouter({
   routes,
 })
 
+// finance 角色只允许访问的路由名单
+const FINANCE_ALLOWED = ['Dashboard', 'OrderList', 'OrderDetail']
+
 router.beforeEach(async (to) => {
   const { useAuthStore } = await import('@/stores/auth')
   const auth = useAuthStore()
-  if (!to.meta.public && !auth.token) {
+  // 非公开页面：sessionStorage 无缓存时才向后端验证 Cookie，避免每次跳转都发请求
+  if (!to.meta.public && !auth.user) {
+    await auth.fetchMe()
+  }
+  if (!to.meta.public && !auth.user) {
     return { name: 'Login' }
+  }
+  // 已登录用户访问登录页，重定向到首页
+  if (to.meta.public && auth.user) {
+    return { name: 'Dashboard' }
+  }
+  if (auth.user?.role === 'finance' && !FINANCE_ALLOWED.includes(to.name)) {
+    return { name: 'Dashboard' }
   }
 })
 

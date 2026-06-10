@@ -7,10 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from sqlalchemy import func as sqlfunc
 from app.core.deps import get_current_user
 from app.database import get_db
+from app.models.accounting import AccountingRecord
 from app.models.inquiry import (
-    Inquiry, FormalOrder, OrderFile, ShipmentBL,
+    Inquiry, FormalOrder, OrderFile, ShipmentBL, ShipmentContainer,
 )
 from app.models.user import User
 from app.schemas.inquiry import (
@@ -29,7 +31,8 @@ from app.config import settings
 
 router = APIRouter(prefix="/formal-orders", tags=["正式订单"])
 
-ORDER_DOC_TYPES = {"mtc", "pl", "ci", "co", "export_permit", "inspection", "packing", "supplement"}
+ORDER_DOC_TYPES = {"mtc", "pl", "ci", "co", "export_permit", "inspection", "packing", "ocean_bl", "supplement"}
+ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".xlsx", ".xls", ".docx", ".doc"}
 
 # 补充附件：不受出运锁定限制，任何状态均可上传/删除
 SUPPLEMENT_DOC_TYPE = "supplement"
@@ -60,14 +63,21 @@ STATUS_LABELS = {
 
 def _can_access(user: User, order: FormalOrder) -> bool:
     role = user.role.name
-    if role in ("super_admin", "boss"):
+    if role in ("super_admin", "boss", "finance"):
         return True
     if role == "salesperson":
         return order.salesperson_id == user.id
     return False
 
 
+def _salary_calculated(order: FormalOrder) -> bool:
+    rec = order.accounting_record
+    return bool(rec and rec.salary_calculated)
+
+
 def _can_edit(user: User, order: FormalOrder) -> bool:
+    if _salary_calculated(order):
+        return False   # 工资已核算，全员锁定
     role = user.role.name
     if role == "super_admin":
         return order.status != "completed"
@@ -151,8 +161,11 @@ def list_orders(
     status: Optional[str] = Query(None),
     so_number: Optional[str] = Query(None),
     active: bool = Query(False),
+    salesperson_id: Optional[int] = Query(None),
+    has_accounting: Optional[bool] = Query(None),
+    salary_calculated: Optional[bool] = Query(None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -167,14 +180,38 @@ def list_orders(
         q = q.filter(FormalOrder.status != "completed")
     if so_number:
         q = q.filter(FormalOrder.so_number.ilike(f"%{so_number}%"))
+    # 财务专用筛选
+    if salesperson_id:
+        q = q.filter(FormalOrder.salesperson_id == salesperson_id)
+    if has_accounting is not None:
+        accounted_ids = db.query(AccountingRecord.order_id)
+        if has_accounting:
+            q = q.filter(FormalOrder.id.in_(accounted_ids))
+        else:
+            q = q.filter(FormalOrder.id.notin_(accounted_ids))
+    if salary_calculated is not None:
+        q = q.outerjoin(AccountingRecord, AccountingRecord.order_id == FormalOrder.id)
+        if salary_calculated:
+            q = q.filter(AccountingRecord.salary_calculated == True)
+        else:
+            q = q.filter(
+                (AccountingRecord.id == None) | (AccountingRecord.salary_calculated == False)
+            )
     total = q.count()
+    # 全量利润合计（所有筛选条件下，跨所有分页）
+    profit_total_row = (
+        db.query(sqlfunc.sum(AccountingRecord.profit))
+        .filter(AccountingRecord.order_id.in_(q.with_entities(FormalOrder.id)))
+        .scalar()
+    )
+    profit_total = float(profit_total_row) if profit_total_row is not None else None
     items = (
-        q.order_by(FormalOrder.id.desc())
+        q.order_by(FormalOrder.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
-    return FormalOrderPage(total=total, page=page, page_size=page_size, items=items)
+    return FormalOrderPage(total=total, page=page, page_size=page_size, items=items, profit_total=profit_total)
 
 
 @router.get("/{order_id}", response_model=FormalOrderOut)
@@ -252,15 +289,27 @@ async def upload_order_file(
     order = db.get(FormalOrder, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="订单不存在")
-    if not _can_edit(current_user, order):
-        raise HTTPException(status_code=403, detail="权限不足")
+    salary_locked = _salary_calculated(order)
+    if salary_locked:
+        if current_user.role.name == "finance":
+            raise HTTPException(status_code=403, detail="工资已核算，财务无法修改此订单")
+        if not _can_edit(current_user, order) and doc_type == SUPPLEMENT_DOC_TYPE:
+            raise HTTPException(status_code=403, detail="权限不足")
+        if doc_type != SUPPLEMENT_DOC_TYPE:
+            raise HTTPException(status_code=400, detail="工资已核算，仅可上传补充附件")
+    else:
+        if not _can_edit(current_user, order):
+            raise HTTPException(status_code=403, detail="权限不足")
     if doc_type != SUPPLEMENT_DOC_TYPE and order.status in FILE_LOCK_STATUSES:
         raise HTTPException(status_code=400, detail="订单已进入出运阶段，归档文件已锁定，仅可上传补充附件")
 
+    original_name = file.filename or "file"
+    ext = os.path.splitext(original_name)[1].lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="不允许的文件类型，请上传 PDF、图片或 Office 文档")
+
     upload_dir = os.path.join(settings.UPLOAD_DIR, "order_files", str(order_id))
     os.makedirs(upload_dir, exist_ok=True)
-    original_name = file.filename or "file"
-    ext = os.path.splitext(original_name)[1]
     saved_name = f"{uuid.uuid4().hex}{ext}"
     saved_path = os.path.join(upload_dir, saved_name)
     content = await file.read()
@@ -292,18 +341,23 @@ def delete_order_file(
     order = db.get(FormalOrder, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="订单不存在")
+    salary_locked = _salary_calculated(order)
+    if salary_locked:
+        raise HTTPException(status_code=403, detail="工资已核算，文件不可删除")
     if not _can_edit(current_user, order):
         raise HTTPException(status_code=403, detail="权限不足")
     rec = db.get(OrderFile, file_id)
     if not rec or rec.order_id != order_id:
         raise HTTPException(status_code=404, detail="文件不存在")
-    if rec.doc_type != SUPPLEMENT_DOC_TYPE and order.status in FILE_LOCK_STATUSES:
-        raise HTTPException(status_code=400, detail="订单已进入出运阶段，归档文件已锁定，仅可删除补充附件")
+    if rec.doc_type == SUPPLEMENT_DOC_TYPE:
+        raise HTTPException(status_code=400, detail="补充附件上传后不可删除")
+    if order.status in FILE_LOCK_STATUSES:
+        raise HTTPException(status_code=400, detail="订单已进入出运阶段，归档文件已锁定")
     full_path = os.path.join(settings.UPLOAD_DIR, rec.file_path)
-    if os.path.exists(full_path):
-        os.remove(full_path)
     db.delete(rec)
     db.commit()
+    if os.path.exists(full_path):
+        os.remove(full_path)
 
 
 # ── 提单 BL + 集装箱 ──────────────────────────────────────────
@@ -342,6 +396,16 @@ def add_bl(
         updated_at=now,
     )
     db.add(bl)
+    db.flush()  # 获取 bl.id 后再插入集装箱
+
+    for c in body.containers:
+        db.add(ShipmentContainer(
+            bl_id=bl.id,
+            container_type=c.container_type,
+            container_number=c.container_number,
+            seal_number=c.seal_number,
+        ))
+
     db.commit()
     db.refresh(bl)
     return bl

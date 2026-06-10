@@ -46,7 +46,7 @@
           <a @click="goDetail(record.id)">{{ record.enq_number }}</a>
         </template>
         <template v-else-if="column.key === 'customer'">
-          {{ record.customer.company_name }}
+          {{ fmtCustomer(record.customer.contact_name, record.customer.company_name) }}
         </template>
         <template v-else-if="column.key === 'salesperson'">
           {{ record.salesperson.full_name }}
@@ -117,6 +117,7 @@ import { message } from 'ant-design-vue'
 import { inquiriesApi } from '@/api/inquiries'
 import { customersApi } from '@/api/customers'
 import { evaluationsApi } from '@/api/evaluations'
+import { fmtCustomer } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -190,7 +191,7 @@ async function submitQuickEval() {
 const loading = ref(false)
 const rows = ref([])
 const filters = ref({ enq_number: '', status: null })
-const pagination = ref({ current: 1, pageSize: 20, total: 0, showTotal: t => `共 ${t} 条` })
+const pagination = ref({ current: 1, pageSize: 10, total: 0, showTotal: t => `共 ${t} 条` })
 
 async function loadData(page = pagination.value.current) {
   loading.value = true
@@ -233,7 +234,7 @@ async function fetchCustomers(kw) {
   const res = await customersApi.list({ company_name: kw || undefined, page_size: 20 })
   const items = res.data?.items || []
   customerOptions.value = items.map((c) => ({
-    value: c.id, label: `${c.company_name}（${c.country}）`,
+    value: c.id, label: `${fmtCustomer(c.contact_name, c.company_name)}（${c.country}）`,
   }))
 }
 function searchCustomers(kw) {

@@ -30,7 +30,7 @@
         </a-popconfirm>
       </template>
       <a-descriptions size="small" :column="3">
-        <a-descriptions-item label="客户">{{ inq.customer.company_name }}</a-descriptions-item>
+        <a-descriptions-item label="客户">{{ fmtCustomer(inq.customer.contact_name, inq.customer.company_name) }}</a-descriptions-item>
         <a-descriptions-item label="业务员">{{ inq.salesperson.full_name }}</a-descriptions-item>
         <a-descriptions-item label="创建时间">{{ (inq.created_at || '').slice(0,10) }}</a-descriptions-item>
         <a-descriptions-item v-if="inq.deposit_amount != null" label="定金金额">
@@ -88,7 +88,7 @@
                   </template>
                 </a-list-item-meta>
                 <template #actions>
-                  <a-popconfirm v-if="canEdit" title="删除该版本？" @confirm="delFile(item.id)">
+                  <a-popconfirm v-if="canDeleteFile(item)" title="删除该版本？" @confirm="delFile(item.id)">
                     <a style="color:#ff4d4f">删除</a>
                   </a-popconfirm>
                 </template>
@@ -147,6 +147,7 @@ import { message, Empty } from 'ant-design-vue'
 import { inquiriesApi, formalOrdersApi } from '@/api/inquiries'
 import { useAuthStore } from '@/stores/auth'
 import EvaluationPanel from '@/components/EvaluationPanel.vue'
+import { fmtCustomer } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -164,8 +165,8 @@ const STATUS_COLOR = {
 
 const DOC_DEFS = [
   { key: 'pricing_sheet', label: '核价单', required: true },
+  { key: 'freight_quote', label: '报价单', required: false },
   { key: 'pi', label: 'PI', required: true },
-  { key: 'freight_quote', label: '货代海运费', required: false },
 ]
 
 const inq = ref(null)
@@ -176,6 +177,10 @@ const canEdit = computed(() => {
   if (auth.hasRole('salesperson')) return inq.value.salesperson.id === auth.user?.id
   return false
 })
+
+function canDeleteFile(file) {
+  return canEdit.value && inq.value?.status === 'active' && file.is_current
+}
 
 const filesByType = computed(() => {
   const map = {}
@@ -206,7 +211,7 @@ const reminder = computed(() => {
       items: [
         { text: '核价单（必备）', done: hasCurrent('pricing_sheet') },
         { text: 'PI 形式发票（必备）', done: hasCurrent('pi') },
-        { text: '货代海运费报价（可选）', done: hasCurrent('freight_quote') },
+        { text: '报价单（可选）', done: hasCurrent('freight_quote') },
         { text: '收到定金后点击「登记定金」即可转正式订单', done: false },
       ],
     }
