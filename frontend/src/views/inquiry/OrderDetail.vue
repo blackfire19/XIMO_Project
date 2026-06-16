@@ -1,11 +1,12 @@
 <template>
   <div v-if="order">
-    <a-page-header :title="order.so_number" @back="$router.back()">
+    <a-page-header :title="order.subject || order.so_number" @back="$router.back()">
       <template #tags>
         <a-tag :color="STATUS_COLOR[order.status]">{{ STATUS_LABEL[order.status] }}</a-tag>
         <a-tag :color="order.is_stock ? 'blue' : 'gold'">{{ order.is_stock ? '现货' : '非现货' }}</a-tag>
       </template>
       <template #extra>
+        <a-button v-if="canEdit" @click="openSubject">编辑主题</a-button>
         <a-popconfirm
           v-if="canEdit && nextStatus"
           :title="advanceTitle"
@@ -15,6 +16,7 @@
         </a-popconfirm>
       </template>
       <a-descriptions size="small" :column="3">
+        <a-descriptions-item label="订单编号">{{ order.so_number }}</a-descriptions-item>
         <a-descriptions-item label="客户">{{ fmtCustomer(order.customer?.contact_name, order.customer?.company_name) }}</a-descriptions-item>
         <a-descriptions-item label="业务员">{{ order.salesperson.full_name }}</a-descriptions-item>
         <a-descriptions-item label="创建时间">{{ (order.created_at || '').slice(0,10) }}</a-descriptions-item>
@@ -62,6 +64,7 @@
             {{ bl.ship_type === 'bulk' ? '散货船' : '集装箱' }}
           </a-tag>
         </a-descriptions-item>
+        <a-descriptions-item label="船司">{{ bl.carrier || '—' }}</a-descriptions-item>
         <a-descriptions-item label="提单号">{{ bl.bl_number || '—' }}</a-descriptions-item>
         <a-descriptions-item v-if="bl.ship_type === 'container'" label="箱型箱量">{{ bl.container_info || '—' }}</a-descriptions-item>
         <a-descriptions-item label="状态">
@@ -206,6 +209,7 @@
           </a-radio-group>
         </a-form-item>
         <a-row :gutter="12">
+          <a-col :span="12"><a-form-item label="船司"><a-input v-model:value="blForm.carrier" placeholder="如 MAERSK、COSCO" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="提单号"><a-input v-model:value="blForm.bl_number" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="船名航次"><a-input v-model:value="blForm.vessel_voyage" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="起运港"><a-input v-model:value="blForm.load_port" placeholder="如 Shanghai" /></a-form-item></a-col>
@@ -228,6 +232,15 @@
         </template>
 
         <a-form-item label="备注"><a-textarea v-model:value="blForm.remarks" :rows="2" /></a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 订单主题 编辑 modal -->
+    <a-modal v-model:open="subjectOpen" title="编辑订单主题" :confirm-loading="subjectSaving" @ok="saveSubject">
+      <a-form layout="vertical">
+        <a-form-item label="主题" required help="必填，列表将直接显示该主题">
+          <a-input v-model:value="subjectInput" :maxlength="120" show-count placeholder="如：德国客户 H 型钢首单" />
+        </a-form-item>
       </a-form>
     </a-modal>
 
@@ -583,6 +596,30 @@ async function advance() {
   await load()
 }
 
+// ── 订单主题 ──
+const subjectOpen = ref(false)
+const subjectSaving = ref(false)
+const subjectInput = ref('')
+
+function openSubject() {
+  subjectInput.value = order.value.subject || ''
+  subjectOpen.value = true
+}
+
+async function saveSubject() {
+  const subject = subjectInput.value.trim()
+  if (!subject) { message.warning('请填写订单主题'); return }
+  subjectSaving.value = true
+  try {
+    await formalOrdersApi.update(order.value.id, { subject })
+    message.success('主题已保存')
+    subjectOpen.value = false
+    await load()
+  } finally {
+    subjectSaving.value = false
+  }
+}
+
 async function beforeUpload(file, docType) {
   try {
     await formalOrdersApi.uploadFile(order.value.id, docType, file)
@@ -609,7 +646,7 @@ function openBL(editing) {
   if (editing && bl.value) {
     const b = bl.value
     blForm.value = {
-      ship_type: b.ship_type, bl_number: b.bl_number || '', vessel_voyage: b.vessel_voyage || '',
+      ship_type: b.ship_type, carrier: b.carrier || '', bl_number: b.bl_number || '', vessel_voyage: b.vessel_voyage || '',
       container_info: b.container_info || '',
       load_port: b.load_port || '', discharge_port: b.discharge_port || '',
       etd: b.etd || null, eta: b.eta || null,
@@ -618,7 +655,7 @@ function openBL(editing) {
     }
   } else {
     blForm.value = {
-      ship_type: 'container', bl_number: '', vessel_voyage: '',
+      ship_type: 'container', carrier: '', bl_number: '', vessel_voyage: '',
       container_info: '',
       load_port: '', discharge_port: '', etd: null, eta: null,
       pieces: null, weight_mt: null, volume_cbm: null, remarks: '',
@@ -633,6 +670,7 @@ async function submitBL() {
     const f = blForm.value
     const payload = {
       ship_type: f.ship_type,
+      carrier: f.carrier || null,
       bl_number: f.bl_number || null,
       vessel_voyage: f.vessel_voyage || null,
       container_info: f.ship_type === 'container' ? (f.container_info || null) : null,

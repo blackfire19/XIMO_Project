@@ -132,6 +132,7 @@ class ContainerOut(ContainerCreate):
 # ---------- 提单 BL ----------
 class BLCreate(BaseModel):
     ship_type: str = "container"      # container / bulk
+    carrier: Optional[str] = None
     bl_number: Optional[str] = None
     vessel_voyage: Optional[str] = None
     container_info: Optional[str] = None
@@ -149,6 +150,7 @@ class BLCreate(BaseModel):
 
 class BLUpdate(BaseModel):
     ship_type: Optional[str] = None
+    carrier: Optional[str] = None
     bl_number: Optional[str] = None
     vessel_voyage: Optional[str] = None
     container_info: Optional[str] = None
@@ -167,6 +169,7 @@ class BLOut(BaseModel):
     id: int
     order_id: int
     ship_type: str
+    carrier: Optional[str] = None
     bl_number: Optional[str] = None
     vessel_voyage: Optional[str] = None
     container_info: Optional[str] = None
@@ -190,12 +193,14 @@ class FormalOrderCreate(BaseModel):
     inquiry_id: int
     is_stock: bool = True
     est_production_date: Optional[date] = None
+    subject: Optional[str] = None
     remarks: Optional[str] = None
 
 
 class FormalOrderUpdate(BaseModel):
     is_stock: Optional[bool] = None
     est_production_date: Optional[date] = None
+    subject: Optional[str] = None
     remarks: Optional[str] = None
 
 
@@ -206,6 +211,7 @@ class FormalOrderStatusUpdate(BaseModel):
 class FormalOrderListItem(BaseModel):
     id: int
     so_number: str
+    subject: Optional[str] = None
     customer: CustomerBrief
     salesperson: SalespersonBrief
     is_stock: bool
@@ -214,6 +220,8 @@ class FormalOrderListItem(BaseModel):
     created_at: str
     profit: Optional[float] = None
     salary_calculated: Optional[bool] = None
+    bl_carrier: Optional[str] = None
+    bl_number: Optional[str] = None
     model_config = {"from_attributes": True}
 
 
@@ -228,6 +236,7 @@ class FormalOrderPage(BaseModel):
 class FormalOrderOut(BaseModel):
     id: int
     so_number: str
+    subject: Optional[str] = None
     inquiry_id: int
     customer: CustomerBrief
     salesperson: SalespersonBrief

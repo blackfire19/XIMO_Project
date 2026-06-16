@@ -107,6 +107,9 @@ def convert_to_order(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    subject = (body.subject or "").strip()
+    if not subject:
+        raise HTTPException(status_code=400, detail="请填写订单主题")
     inq = db.get(Inquiry, body.inquiry_id)
     if not inq:
         raise HTTPException(status_code=404, detail="询价单不存在")
@@ -133,6 +136,7 @@ def convert_to_order(
             salesperson_id=inq.salesperson_id,
             is_stock=body.is_stock,
             est_production_date=body.est_production_date,
+            subject=subject,
             status="confirmed",
             remarks=body.remarks,
             created_by=current_user.id,
@@ -240,7 +244,7 @@ def update_order(
         raise HTTPException(status_code=404, detail="订单不存在")
     if not _can_edit(current_user, order):
         raise HTTPException(status_code=403, detail="权限不足")
-    for field in ("is_stock", "est_production_date", "remarks"):
+    for field in ("is_stock", "est_production_date", "subject", "remarks"):
         val = getattr(body, field)
         if val is not None:
             setattr(order, field, val)
@@ -380,6 +384,7 @@ def add_bl(
     bl = ShipmentBL(
         order_id=order_id,
         ship_type=body.ship_type,
+        carrier=body.carrier,
         bl_number=body.bl_number,
         vessel_voyage=body.vessel_voyage,
         container_info=body.container_info,
@@ -427,7 +432,7 @@ def update_bl(
     bl = db.get(ShipmentBL, bl_id)
     if not bl or bl.order_id != order_id:
         raise HTTPException(status_code=404, detail="提单不存在")
-    for field in ("ship_type", "bl_number", "vessel_voyage", "container_info",
+    for field in ("ship_type", "carrier", "bl_number", "vessel_voyage", "container_info",
                   "load_port", "discharge_port",
                   "etd", "eta", "status", "pieces", "weight_mt", "volume_cbm", "remarks"):
         val = getattr(body, field)
