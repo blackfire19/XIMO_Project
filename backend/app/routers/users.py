@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -62,6 +64,7 @@ def create_user(
         if conflict:
             raise HTTPException(status_code=400, detail="业务员编码已被占用")
 
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     user = User(
         username=body.username,
         password_hash=hash_password(body.password),
@@ -69,6 +72,8 @@ def create_user(
         role_id=body.role_id,
         salesperson_code=body.salesperson_code,
         is_active=True,
+        created_at=now,
+        updated_at=now,
     )
     db.add(user)
     db.commit()

@@ -1,4 +1,4 @@
-from sqlalchemy import Date, Integer, Numeric, String, Text, ForeignKey
+from sqlalchemy import Date, Integer, Numeric, String, Text, ForeignKey, text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
@@ -18,4 +18,4 @@ class Product(Base):
     quantity_pcs: Mapped[int | None] = mapped_column(Integer)              # 支数
     remark: Mapped[str | None] = mapped_column(Text)                       # 备注
     price_updated_at: Mapped[str | None] = mapped_column(Date)             # 价格更新日期
-    created_at: Mapped[str] = mapped_column(server_default="NOW()")
+    created_at: Mapped[str] = mapped_column(server_default=text("now()"))

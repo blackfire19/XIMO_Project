@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from typing import Optional
@@ -171,10 +171,11 @@ def import_products(
         raise HTTPException(status_code=422, detail="文件中未解析到有效数据，请检查格式")
 
     today = date.today()
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     try:
         db.query(Product).filter(Product.warehouse == warehouse).delete()
         db.bulk_insert_mappings(Product, [
-            {**row, "warehouse": warehouse, "price_updated_at": today}
+            {**row, "warehouse": warehouse, "price_updated_at": today, "created_at": now}
             for row in rows
         ])
         db.commit()

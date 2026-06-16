@@ -51,6 +51,7 @@ def create_announcement(
         content=body.content,
         created_by=current_user.id,
         is_active=True,
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
     )
     db.add(ann)
     db.commit()

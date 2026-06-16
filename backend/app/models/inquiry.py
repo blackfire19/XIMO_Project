@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Date, Integer, Numeric, String, Text, ForeignKey
+from sqlalchemy import Boolean, Date, Integer, Numeric, String, Text, ForeignKey, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -16,8 +16,8 @@ class Inquiry(Base):
     deposit_date: Mapped[str | None] = mapped_column(Date)
     remarks: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[str] = mapped_column(server_default="NOW()")
-    updated_at: Mapped[str] = mapped_column(server_default="NOW()")
+    created_at: Mapped[str] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[str] = mapped_column(server_default=text("now()"))
 
     customer: Mapped["Customer"] = relationship(foreign_keys=[customer_id])  # type: ignore
     salesperson: Mapped["User"] = relationship(foreign_keys=[salesperson_id])  # type: ignore
@@ -43,7 +43,7 @@ class InquiryFile(Base):
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     note: Mapped[str | None] = mapped_column(String(200))
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    uploaded_at: Mapped[str] = mapped_column(server_default="NOW()")
+    uploaded_at: Mapped[str] = mapped_column(server_default=text("now()"))
 
     inquiry: Mapped[Inquiry] = relationship(back_populates="files")
 
@@ -62,8 +62,8 @@ class FormalOrder(Base):
     # confirmed / production / ready / shipping / completed
     remarks: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[str] = mapped_column(server_default="NOW()")
-    updated_at: Mapped[str] = mapped_column(server_default="NOW()")
+    created_at: Mapped[str] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[str] = mapped_column(server_default=text("now()"))
 
     inquiry: Mapped[Inquiry] = relationship(back_populates="formal_order")
     customer: Mapped["Customer"] = relationship(foreign_keys=[customer_id])  # type: ignore
@@ -106,7 +106,7 @@ class OrderFile(Base):
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    uploaded_at: Mapped[str] = mapped_column(server_default="NOW()")
+    uploaded_at: Mapped[str] = mapped_column(server_default=text("now()"))
 
     order: Mapped[FormalOrder] = relationship(back_populates="files")
 
@@ -133,8 +133,8 @@ class ShipmentBL(Base):
     weight_mt: Mapped[float | None] = mapped_column(Numeric(12, 3))
     volume_cbm: Mapped[float | None] = mapped_column(Numeric(12, 3))
     remarks: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[str] = mapped_column(server_default="NOW()")
-    updated_at: Mapped[str] = mapped_column(server_default="NOW()")
+    created_at: Mapped[str] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[str] = mapped_column(server_default=text("now()"))
 
     order: Mapped[FormalOrder] = relationship(back_populates="bls")
     containers: Mapped[list["ShipmentContainer"]] = relationship(back_populates="bl", cascade="all, delete-orphan")
