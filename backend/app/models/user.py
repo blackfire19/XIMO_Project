@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Integer, String, ForeignKey
+from sqlalchemy import Boolean, Integer, String, ForeignKey, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -23,7 +23,7 @@ class User(Base):
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"), nullable=False)
     salesperson_code: Mapped[str | None] = mapped_column(String(20), unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[str] = mapped_column(server_default="NOW()")
-    updated_at: Mapped[str] = mapped_column(server_default="NOW()")
+    created_at: Mapped[str] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[str] = mapped_column(server_default=text("now()"))
 
     role: Mapped[Role] = relationship(back_populates="users")

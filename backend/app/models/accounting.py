@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Integer, Numeric, String, Text, ForeignKey
+from sqlalchemy import Boolean, Integer, Numeric, String, Text, ForeignKey, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -14,8 +14,8 @@ class AccountingRecord(Base):
     file_name: Mapped[str | None] = mapped_column(String(255))
     file_path: Mapped[str | None] = mapped_column(String(500))
     recorded_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    recorded_at: Mapped[str] = mapped_column(server_default="NOW()")
-    updated_at: Mapped[str] = mapped_column(server_default="NOW()")
+    recorded_at: Mapped[str] = mapped_column(server_default=text("now()"))
+    updated_at: Mapped[str] = mapped_column(server_default=text("now()"))
 
     order: Mapped["FormalOrder"] = relationship(foreign_keys=[order_id], back_populates="accounting_record")  # type: ignore
     recorder: Mapped["User"] = relationship(foreign_keys=[recorded_by])  # type: ignore
