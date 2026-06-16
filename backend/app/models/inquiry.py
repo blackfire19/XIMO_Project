@@ -53,6 +53,7 @@ class FormalOrder(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     so_number: Mapped[str] = mapped_column(String(60), unique=True, nullable=False)
+    subject: Mapped[str | None] = mapped_column(String(120))   # 自定义主题，列表优先展示
     inquiry_id: Mapped[int] = mapped_column(ForeignKey("inquiries.id"), nullable=False)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), nullable=False)
     salesperson_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
@@ -83,6 +84,14 @@ class FormalOrder(Base):
     def salary_calculated(self):
         rec = self.accounting_record
         return rec.salary_calculated if rec else None
+
+    @property
+    def bl_carrier(self) -> str | None:
+        return self.bls[0].carrier if self.bls else None
+
+    @property
+    def bl_number(self) -> str | None:
+        return self.bls[0].bl_number if self.bls else None
 
     @property
     def inquiry_files(self) -> list["InquiryFile"]:
@@ -119,6 +128,7 @@ class ShipmentBL(Base):
     order_id: Mapped[int] = mapped_column(ForeignKey("formal_orders.id", ondelete="CASCADE"), nullable=False)
     ship_type: Mapped[str] = mapped_column(String(20), default="container", nullable=False)
     # container / bulk
+    carrier: Mapped[str | None] = mapped_column(String(120))   # 船司
     bl_number: Mapped[str | None] = mapped_column(String(80))
     vessel_voyage: Mapped[str | None] = mapped_column(String(120))
     container_info: Mapped[str | None] = mapped_column(String(200))   # 箱型箱量，如 20GP*2、40HC*1

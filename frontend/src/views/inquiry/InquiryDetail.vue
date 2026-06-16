@@ -123,6 +123,9 @@
     <!-- 转订单 -->
     <a-modal v-model:open="convertOpen" title="转为正式订单" :confirm-loading="saving" @ok="doConvert">
       <a-form layout="vertical">
+        <a-form-item label="订单主题" required help="必填，列表将直接显示该主题，便于识别订单">
+          <a-input v-model:value="convertForm.subject" :maxlength="120" show-count placeholder="如：德国客户 H 型钢首单" />
+        </a-form-item>
         <a-form-item label="货物类型">
           <a-radio-group v-model:value="convertForm.is_stock">
             <a-radio :value="true">现货</a-radio>
@@ -281,16 +284,19 @@ async function doDeposit() {
 
 // ── 转订单 ──
 const convertOpen = ref(false)
-const convertForm = ref({ is_stock: true, est_production_date: null, remarks: '' })
+const convertForm = ref({ subject: '', is_stock: true, est_production_date: null, remarks: '' })
 function openConvert() {
-  convertForm.value = { is_stock: true, est_production_date: null, remarks: '' }
+  convertForm.value = { subject: '', is_stock: true, est_production_date: null, remarks: '' }
   convertOpen.value = true
 }
 async function doConvert() {
+  const subject = convertForm.value.subject.trim()
+  if (!subject) { message.warning('请填写订单主题'); return }
   saving.value = true
   try {
     const res = await formalOrdersApi.convert({
       inquiry_id: inq.value.id,
+      subject,
       is_stock: convertForm.value.is_stock,
       est_production_date: convertForm.value.is_stock ? null : convertForm.value.est_production_date,
       remarks: convertForm.value.remarks || null,

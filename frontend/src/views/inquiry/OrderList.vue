@@ -93,7 +93,8 @@
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'so_number'">
-          <a @click="goDetail(record.id)">{{ record.so_number }}</a>
+          <a @click="goDetail(record.id)">{{ record.subject || record.so_number }}</a>
+          <div v-if="record.subject" style="color:#bbb; font-size:12px">{{ record.so_number }}</div>
         </template>
         <template v-else-if="column.key === 'customer'">{{ fmtCustomer(record.customer.contact_name, record.customer.company_name) }}</template>
         <template v-else-if="column.key === 'salesperson'">{{ record.salesperson.full_name }}</template>
@@ -102,6 +103,10 @@
         </template>
         <template v-else-if="column.key === 'status'">
           <a-tag :color="STATUS_COLOR[record.status]">{{ STATUS_LABEL[record.status] }}</a-tag>
+        </template>
+        <template v-else-if="column.key === 'bl_info'">
+          <span v-if="record.bl_carrier && record.bl_number">{{ record.bl_carrier }}：{{ record.bl_number }}</span>
+          <span v-else style="color:#bbb">—</span>
         </template>
         <template v-else-if="column.key === 'salary_calculated'">
           <a-tag v-if="record.profit != null" :color="record.salary_calculated ? 'green' : 'orange'">
@@ -211,7 +216,7 @@ const STATUS_COLOR = {
 
 // 列定义
 const baseColumns = [
-  { title: '订单号', dataIndex: 'so_number', key: 'so_number' },
+  { title: '主题 / 订单号', dataIndex: 'so_number', key: 'so_number' },
   { title: '客户', key: 'customer' },
   { title: '业务员', key: 'salesperson' },
 ]
@@ -223,6 +228,7 @@ const normalColumns = [
 ]
 const timeColumn = { title: '创建时间', dataIndex: 'created_at', key: 'created_at',
   customRender: ({ text }) => (text || '').slice(0, 10) }
+const blColumn = { title: '提单信息', key: 'bl_info' }
 const profitColumn = { title: '利润（CNY）', key: 'profit', width: 140, align: 'right' }
 const salaryColumn = { title: '工资发放', key: 'salary_calculated', width: 90, align: 'center' }
 const actionColumn = { title: '操作', key: 'action', width: 80 }
@@ -230,6 +236,7 @@ const actionColumn = { title: '操作', key: 'action', width: 80 }
 const columns = computed(() => [
   ...baseColumns,
   ...(isFinance ? [] : normalColumns),
+  blColumn,
   timeColumn,
   profitColumn,
   ...(isFinance || isBossOrAdmin ? [salaryColumn] : []),
