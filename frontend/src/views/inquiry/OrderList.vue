@@ -348,16 +348,30 @@ function onTableChange(pag) { loadData(pag.current) }
 
 function goDetail(id) { router.push({ name: 'OrderDetail', params: { id } }) }
 
+function parseTriBool(v) {
+  return v === 'true' ? true : v === 'false' ? false : null
+}
+
 function applyRouteQuery() {
-  if (!isFinance) {
-    filters.value.status = route.query.status || null
+  const q = route.query
+  if (isFinance) {
+    if (q.has_accounting !== undefined) filters.value.has_accounting = parseTriBool(q.has_accounting)
+    if (q.salary_calculated !== undefined) filters.value.salary_calculated = parseTriBool(q.salary_calculated)
+  } else if (isBossOrAdmin) {
+    // 跳转进入（带 query）按实际显示；直接进入（无 query）默认已记账+未发放
+    const isJump = q.status !== undefined || q.has_accounting !== undefined
+      || q.salary_calculated !== undefined || q.active !== undefined
+    if (isJump) {
+      filters.value.status = q.status || null
+      filters.value.has_accounting = q.has_accounting !== undefined ? parseTriBool(q.has_accounting) : null
+      filters.value.salary_calculated = q.salary_calculated !== undefined ? parseTriBool(q.salary_calculated) : null
+    } else {
+      filters.value.status = null
+      filters.value.has_accounting = true
+      filters.value.salary_calculated = false
+    }
   } else {
-    if (route.query.has_accounting !== undefined) {
-      filters.value.has_accounting = route.query.has_accounting === 'true' ? true : route.query.has_accounting === 'false' ? false : null
-    }
-    if (route.query.salary_calculated !== undefined) {
-      filters.value.salary_calculated = route.query.salary_calculated === 'true' ? true : route.query.salary_calculated === 'false' ? false : null
-    }
+    filters.value.status = q.status || null
   }
   loadData(1)
 }
