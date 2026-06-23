@@ -70,8 +70,9 @@ const router = createRouter({
   routes,
 })
 
-// finance 角色只允许访问的路由名单
+// finance / logistics 角色只允许访问的路由名单
 const FINANCE_ALLOWED = ['Dashboard', 'OrderList', 'OrderDetail']
+const LOGISTICS_ALLOWED = ['Dashboard', 'OrderList', 'OrderDetail']
 
 router.beforeEach(async (to) => {
   const { useAuthStore } = await import('@/stores/auth')
@@ -88,6 +89,9 @@ router.beforeEach(async (to) => {
     return { name: 'Dashboard' }
   }
   if (auth.user?.role === 'finance' && !FINANCE_ALLOWED.includes(to.name)) {
+    return { name: 'Dashboard' }
+  }
+  if (auth.user?.role === 'logistics' && !LOGISTICS_ALLOWED.includes(to.name)) {
     return { name: 'Dashboard' }
   }
 })
