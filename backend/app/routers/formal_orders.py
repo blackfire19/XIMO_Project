@@ -38,6 +38,8 @@ ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".xlsx", ".xls", "
 SUPPLEMENT_DOC_TYPE = "supplement"
 # 进入这些状态后，正式归档文件只读（仅可查看），不能再上传/删除
 FILE_LOCK_STATUSES = {"shipping", "completed"}
+# 出运阶段例外：CO 原产地证、海运提单通常出运后才出具，故 shipping 状态仍允许上传/删除
+SHIPPING_STAGE_DOC_TYPES = {"co", "ocean_bl"}
 
 
 def _next_status(order: FormalOrder) -> str | None:
@@ -321,7 +323,8 @@ async def upload_order_file(
     else:
         if not _can_edit(current_user, order):
             raise HTTPException(status_code=403, detail="权限不足")
-    if doc_type != SUPPLEMENT_DOC_TYPE and order.status in FILE_LOCK_STATUSES:
+    shipping_stage_exception = order.status == "shipping" and doc_type in SHIPPING_STAGE_DOC_TYPES
+    if doc_type != SUPPLEMENT_DOC_TYPE and order.status in FILE_LOCK_STATUSES and not shipping_stage_exception:
         raise HTTPException(status_code=400, detail="订单已进入出运阶段，归档文件已锁定，仅可上传补充附件")
 
     original_name = file.filename or "file"
@@ -372,7 +375,8 @@ def delete_order_file(
         raise HTTPException(status_code=404, detail="文件不存在")
     if rec.doc_type == SUPPLEMENT_DOC_TYPE:
         raise HTTPException(status_code=400, detail="补充附件上传后不可删除")
-    if order.status in FILE_LOCK_STATUSES:
+    shipping_stage_exception = order.status == "shipping" and rec.doc_type in SHIPPING_STAGE_DOC_TYPES
+    if order.status in FILE_LOCK_STATUSES and not shipping_stage_exception:
         raise HTTPException(status_code=400, detail="订单已进入出运阶段，归档文件已锁定")
     full_path = os.path.join(settings.UPLOAD_DIR, rec.file_path)
     db.delete(rec)
