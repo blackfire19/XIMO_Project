@@ -67,6 +67,10 @@
           <a @click.stop="goDetail(record.id)">{{ fmtCustomer(record.contact_name, record.company_name) }}</a>
         </template>
 
+        <template v-else-if="column.key === 'country'">
+          {{ countryLabel(record.country) }}
+        </template>
+
         <template v-else-if="column.key === 'grade'">
           <a-tag :color="gradeColor(record.grade)">{{ gradeLabel(record.grade) }}</a-tag>
         </template>
@@ -162,7 +166,7 @@ import { PlusOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { customersApi } from '@/api/customers'
 import { fmtCustomer } from '@/utils/format'
-import { filterCountries } from '@/utils/countries'
+import { filterCountries, countryLabel } from '@/utils/countries'
 
 const TRADE_TERMS = ['EXW', 'FOB', 'CFR', 'CIF', 'DAP', 'DDP']
 const countryOptions = ref(filterCountries(''))

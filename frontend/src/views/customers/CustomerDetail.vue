@@ -17,7 +17,7 @@
         <a-card style="margin-bottom: 16px">
           <a-descriptions :column="3" bordered size="small">
             <a-descriptions-item label="公司名称">{{ customer.company_name }}</a-descriptions-item>
-            <a-descriptions-item label="国家">{{ customer.country }}</a-descriptions-item>
+            <a-descriptions-item label="国家">{{ countryLabel(customer.country) }}</a-descriptions-item>
             <a-descriptions-item label="联系人">{{ customer.contact_name }}</a-descriptions-item>
             <a-descriptions-item label="邮箱">{{ customer.email || '-' }}</a-descriptions-item>
             <a-descriptions-item label="电话">{{ customer.phone || '-' }}</a-descriptions-item>
@@ -207,7 +207,7 @@ import { PlusOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { customersApi } from '@/api/customers'
 import { fmtCustomer } from '@/utils/format'
-import { filterCountries } from '@/utils/countries'
+import { filterCountries, countryLabel } from '@/utils/countries'
 import EvaluationPanel from '@/components/EvaluationPanel.vue'
 
 const TRADE_TERMS = ['EXW', 'FOB', 'CFR', 'CIF', 'DAP', 'DDP']

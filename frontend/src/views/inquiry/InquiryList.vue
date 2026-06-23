@@ -125,6 +125,7 @@ import { inquiriesApi } from '@/api/inquiries'
 import { customersApi } from '@/api/customers'
 import { evaluationsApi } from '@/api/evaluations'
 import { fmtCustomer } from '@/utils/format'
+import { countryLabel } from '@/utils/countries'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -242,7 +243,7 @@ async function fetchCustomers(kw) {
   const res = await customersApi.list({ company_name: kw || undefined, page_size: 20 })
   const items = res.data?.items || []
   customerOptions.value = items.map((c) => ({
-    value: c.id, label: `${fmtCustomer(c.contact_name, c.company_name)}（${c.country}）`,
+    value: c.id, label: `${fmtCustomer(c.contact_name, c.company_name)}（${countryLabel(c.country)}）`,
   }))
 }
 function searchCustomers(kw) {
