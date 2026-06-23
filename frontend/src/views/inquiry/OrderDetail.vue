@@ -201,7 +201,7 @@
 
     <!-- 提单 编辑/创建 modal -->
     <a-modal v-model:open="blOpen" :title="blEditing ? '编辑提单' : '创建提单'" width="640" :confirm-loading="saving" @ok="submitBL" @cancel="blForm = null; blEditing = false">
-      <a-form layout="vertical">
+      <a-form v-if="blForm" layout="vertical">
         <a-form-item label="运输方式">
           <a-radio-group v-model:value="blForm.ship_type">
             <a-radio value="container">集装箱</a-radio>
