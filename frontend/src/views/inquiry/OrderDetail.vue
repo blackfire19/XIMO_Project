@@ -200,8 +200,8 @@
     </a-card>
 
     <!-- 提单 编辑/创建 modal -->
-    <a-modal v-model:open="blOpen" :title="blEditing ? '编辑提单' : '创建提单'" width="640" :confirm-loading="saving" @ok="submitBL" @cancel="blForm = null; blEditing = false">
-      <a-form layout="vertical">
+    <a-modal v-model:open="blOpen" :title="blEditing ? '编辑提单' : '创建提单'" width="640" :confirm-loading="saving" @ok="submitBL" @cancel="blEditing = false">
+      <a-form v-if="blForm" layout="vertical">
         <a-form-item label="运输方式">
           <a-radio-group v-model:value="blForm.ship_type">
             <a-radio value="container">集装箱</a-radio>
@@ -692,6 +692,8 @@ async function submitBL() {
     }
     blOpen.value = false
     await load()
+  } catch (e) {
+    // 错误提示由 api 响应拦截器统一弹出；此处仅捕获以保持弹窗打开供重试
   } finally {
     saving.value = false
   }
