@@ -238,7 +238,7 @@
                       <router-link :to="`/customers/${item.id}`">{{ fmtCustomer(item.contact_name, item.company_name) }}</router-link>
                     </template>
                     <template #description>
-                      {{ item.country }} · {{ GRADE_LABELS[item.grade] }} · {{ FREQ_LABELS[item.follow_freq] }}
+                      {{ countryLabel(item.country) }} · {{ GRADE_LABELS[item.grade] }} · {{ FREQ_LABELS[item.follow_freq] }}
                     </template>
                   </a-list-item-meta>
                   <template #extra>
@@ -532,6 +532,7 @@ import { announcementsApi } from '@/api/announcements'
 import { evaluationsApi } from '@/api/evaluations'
 import * as echarts from 'echarts'
 import { fmtCustomer } from '@/utils/format'
+import { countryLabel } from '@/utils/countries'
 
 const auth = useAuthStore()
 
@@ -703,7 +704,13 @@ const dueTodayColumns = [
     key: 'company_name',
     customRender: ({ record }) => fmtCustomer(record.contact_name, record.company_name),
   },
-  { title: '国家', dataIndex: 'country', key: 'country', width: 100 },
+  {
+    title: '国家',
+    dataIndex: 'country',
+    key: 'country',
+    width: 100,
+    customRender: ({ text }) => countryLabel(text),
+  },
   { title: '联系人', dataIndex: 'contact_name', key: 'contact_name', width: 100 },
   {
     title: '客户分级',
