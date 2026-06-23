@@ -134,6 +134,7 @@ class ShipmentBL(Base):
     container_info: Mapped[str | None] = mapped_column(String(200))   # 箱型箱量，如 20GP*2、40HC*1
     load_port: Mapped[str | None] = mapped_column(String(120))      # 起运港
     discharge_port: Mapped[str | None] = mapped_column(String(120))  # 目的港
+    discharge_country: Mapped[str | None] = mapped_column(String(80))  # 目的国（英文标准名，用于地图航线）
     etd: Mapped[str | None] = mapped_column(Date)
     eta: Mapped[str | None] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(20), default="planned", nullable=False)

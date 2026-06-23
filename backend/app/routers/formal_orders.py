@@ -411,6 +411,7 @@ def add_bl(
         container_info=body.container_info,
         load_port=body.load_port,
         discharge_port=body.discharge_port,
+        discharge_country=body.discharge_country,
         etd=body.etd,
         eta=body.eta,
         status="planned",
@@ -454,7 +455,7 @@ def update_bl(
     if not bl or bl.order_id != order_id:
         raise HTTPException(status_code=404, detail="提单不存在")
     for field in ("ship_type", "carrier", "bl_number", "vessel_voyage", "container_info",
-                  "load_port", "discharge_port",
+                  "load_port", "discharge_port", "discharge_country",
                   "etd", "eta", "status", "pieces", "weight_mt", "volume_cbm", "remarks"):
         val = getattr(body, field)
         if val is not None:

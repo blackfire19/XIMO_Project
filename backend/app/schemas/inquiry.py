@@ -138,6 +138,7 @@ class BLCreate(BaseModel):
     container_info: Optional[str] = None
     load_port: Optional[str] = None
     discharge_port: Optional[str] = None
+    discharge_country: Optional[str] = None
     etd: Optional[date] = None
     eta: Optional[date] = None
     # 散货船字段
@@ -156,6 +157,7 @@ class BLUpdate(BaseModel):
     container_info: Optional[str] = None
     load_port: Optional[str] = None
     discharge_port: Optional[str] = None
+    discharge_country: Optional[str] = None
     etd: Optional[date] = None
     eta: Optional[date] = None
     status: Optional[str] = None
@@ -175,6 +177,7 @@ class BLOut(BaseModel):
     container_info: Optional[str] = None
     load_port: Optional[str] = None
     discharge_port: Optional[str] = None
+    discharge_country: Optional[str] = None
     etd: Optional[date] = None
     eta: Optional[date] = None
     status: str

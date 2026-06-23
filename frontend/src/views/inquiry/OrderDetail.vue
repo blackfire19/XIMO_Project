@@ -82,6 +82,7 @@
         <a-descriptions-item label="船名航次">{{ bl.vessel_voyage || '—' }}</a-descriptions-item>
         <a-descriptions-item label="起运港">{{ bl.load_port || '—' }}</a-descriptions-item>
         <a-descriptions-item label="目的港">{{ bl.discharge_port || '—' }}</a-descriptions-item>
+        <a-descriptions-item label="目的国">{{ bl.discharge_country ? countryLabel(bl.discharge_country) : '—' }}</a-descriptions-item>
         <a-descriptions-item label="ETD">{{ bl.etd || '—' }}</a-descriptions-item>
         <a-descriptions-item label="ETA">{{ bl.eta || '—' }}</a-descriptions-item>
         <a-descriptions-item label="备注">{{ bl.remarks || '—' }}</a-descriptions-item>
@@ -214,6 +215,19 @@
           <a-col :span="12"><a-form-item label="船名航次"><a-input v-model:value="blForm.vessel_voyage" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="起运港"><a-input v-model:value="blForm.load_port" placeholder="如 Shanghai" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="目的港"><a-input v-model:value="blForm.discharge_port" placeholder="如 Hamburg" /></a-form-item></a-col>
+          <a-col :span="12">
+            <a-form-item label="目的国">
+              <a-select
+                v-model:value="blForm.discharge_country"
+                show-search
+                allow-clear
+                placeholder="搜索国家（中文或英文）"
+                :filter-option="false"
+                :options="countryOptions"
+                @search="onCountrySearch"
+              />
+            </a-form-item>
+          </a-col>
           <a-col :span="12"><a-form-item label="ETD"><a-date-picker v-model:value="blForm.etd" style="width:100%" value-format="YYYY-MM-DD" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="ETA"><a-date-picker v-model:value="blForm.eta" style="width:100%" value-format="YYYY-MM-DD" /></a-form-item></a-col>
           <a-col v-if="blForm.ship_type === 'container'" :span="24">
@@ -357,6 +371,7 @@ import { formalOrdersApi } from '@/api/inquiries'
 import { accountingApi } from '@/api/accounting'
 import { useAuthStore } from '@/stores/auth'
 import { fmtCustomer } from '@/utils/format'
+import { filterCountries, countryLabel } from '@/utils/countries'
 import EvaluationPanel from '@/components/EvaluationPanel.vue'
 
 const route = useRoute()
@@ -654,6 +669,10 @@ const blOpen = ref(false)
 const blEditing = ref(false)
 const saving = ref(false)
 const blForm = ref(null)
+const countryOptions = ref(filterCountries(''))
+function onCountrySearch(val) {
+  countryOptions.value = filterCountries(val)
+}
 
 function openBL(editing) {
   blEditing.value = editing
@@ -663,6 +682,7 @@ function openBL(editing) {
       ship_type: b.ship_type, carrier: b.carrier || '', bl_number: b.bl_number || '', vessel_voyage: b.vessel_voyage || '',
       container_info: b.container_info || '',
       load_port: b.load_port || '', discharge_port: b.discharge_port || '',
+      discharge_country: b.discharge_country || undefined,
       etd: b.etd || null, eta: b.eta || null,
       pieces: b.pieces, weight_mt: b.weight_mt, volume_cbm: b.volume_cbm,
       remarks: b.remarks || '',
@@ -671,7 +691,7 @@ function openBL(editing) {
     blForm.value = {
       ship_type: 'container', carrier: '', bl_number: '', vessel_voyage: '',
       container_info: '',
-      load_port: '', discharge_port: '', etd: null, eta: null,
+      load_port: '', discharge_port: '', discharge_country: undefined, etd: null, eta: null,
       pieces: null, weight_mt: null, volume_cbm: null, remarks: '',
     }
   }
@@ -690,6 +710,7 @@ async function submitBL() {
       container_info: f.ship_type === 'container' ? (f.container_info || null) : null,
       load_port: f.load_port || null,
       discharge_port: f.discharge_port || null,
+      discharge_country: f.discharge_country || null,
       etd: f.etd || null,
       eta: f.eta || null,
       remarks: f.remarks || null,
