@@ -385,6 +385,11 @@
       <a-empty description="采购员暂无看板数据" style="margin-top: 48px" />
     </template>
 
+    <!-- 后勤看板（仅公告） -->
+    <template v-else-if="auth.hasRole('logistics')">
+      <a-empty description="后勤暂无看板数据，请前往「正式订单」查看跟单进度" style="margin-top: 48px" />
+    </template>
+
     <!-- ====== 弹窗：今日有效跟进摘要全部（老板） ====== -->
     <a-modal
       v-model:open="showAllFollowSummary"

@@ -13,16 +13,16 @@
           <dashboard-outlined />
           <span>首页看板</span>
         </a-menu-item>
-        <a-sub-menu v-if="!auth.hasRole('finance')" key="customers-group">
+        <a-sub-menu v-if="!auth.hasRole('finance', 'logistics')" key="customers-group">
           <template #title><team-outlined /><span>客户管理</span></template>
           <a-menu-item key="/customers">客户列表</a-menu-item>
           <a-menu-item key="/follow-ups">跟进记录</a-menu-item>
         </a-sub-menu>
-        <a-menu-item v-if="!auth.hasRole('finance')" key="/products">
+        <a-menu-item v-if="!auth.hasRole('finance', 'logistics')" key="/products">
           <database-outlined />
           <span>产品库</span>
         </a-menu-item>
-        <a-menu-item v-if="!auth.hasRole('finance')" key="/inquiries">
+        <a-menu-item v-if="!auth.hasRole('finance', 'logistics')" key="/inquiries">
           <file-text-outlined />
           <span>询价单</span>
         </a-menu-item>

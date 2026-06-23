@@ -202,6 +202,7 @@ const route = useRoute()
 const auth = useAuthStore()
 const canEvaluate = auth.hasRole('boss', 'super_admin')
 const isFinance = auth.hasRole('finance')
+const isLogistics = auth.hasRole('logistics')
 const isBossOrAdmin = auth.hasRole('boss', 'super_admin')
 const canFilterBySalesperson = auth.hasRole('boss', 'super_admin', 'finance')
 
@@ -238,7 +239,7 @@ const columns = computed(() => [
   ...(isFinance ? [] : normalColumns),
   blColumn,
   timeColumn,
-  profitColumn,
+  ...(isLogistics ? [] : [profitColumn]),
   ...(isFinance || isBossOrAdmin ? [salaryColumn] : []),
   ...(canEvaluate ? [actionColumn] : []),
 ])

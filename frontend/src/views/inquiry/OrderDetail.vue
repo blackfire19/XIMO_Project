@@ -400,8 +400,8 @@ const canEdit = computed(() => {
 // 核算工资后，非财务仍可上传/删除补充附件
 const canSupplement = computed(() => {
   if (!order.value) return false
-  if (auth.hasRole('finance')) return false   // 财务核算后完全锁定
-  if (salaryLocked.value) return !auth.hasRole('finance')
+  if (auth.hasRole('finance', 'logistics')) return false   // 财务核算后完全锁定；后勤只读
+  if (salaryLocked.value) return true
   return canEdit.value
 })
 

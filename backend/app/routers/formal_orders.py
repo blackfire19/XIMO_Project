@@ -63,7 +63,7 @@ STATUS_LABELS = {
 
 def _can_access(user: User, order: FormalOrder) -> bool:
     role = user.role.name
-    if role in ("super_admin", "boss", "finance"):
+    if role in ("super_admin", "boss", "finance", "logistics"):
         return True
     if role == "salesperson":
         return order.salesperson_id == user.id
@@ -174,6 +174,10 @@ def list_orders(
     current_user: User = Depends(get_current_user),
 ):
     q = db.query(FormalOrder)
+    # 后勤：只读跟单，禁止通过财务筛选参数推断记账/工资状态
+    if current_user.role.name == "logistics":
+        has_accounting = None
+        salary_calculated = None
     if current_user.role.name == "salesperson":
         q = q.filter(FormalOrder.salesperson_id == current_user.id)
     if customer_id:
@@ -215,7 +219,14 @@ def list_orders(
         .limit(page_size)
         .all()
     )
-    return FormalOrderPage(total=total, page=page, page_size=page_size, items=items, profit_total=profit_total)
+    # 后勤：只读跟单，屏蔽利润/工资等财务数据
+    item_out = [FormalOrderListItem.model_validate(o) for o in items]
+    if current_user.role.name == "logistics":
+        for it in item_out:
+            it.profit = None
+            it.salary_calculated = None
+        profit_total = None
+    return FormalOrderPage(total=total, page=page, page_size=page_size, items=item_out, profit_total=profit_total)
 
 
 @router.get("/{order_id}", response_model=FormalOrderOut)
@@ -229,7 +240,13 @@ def get_order(
         raise HTTPException(status_code=404, detail="订单不存在")
     if not _can_access(current_user, order):
         raise HTTPException(status_code=403, detail="权限不足")
-    return order
+    out = FormalOrderOut.model_validate(order)
+    if current_user.role.name == "logistics":
+        out.profit = None
+        out.salary_calculated = None
+        # 后勤：屏蔽核价单（含成本），保留 PI 供单据核对
+        out.inquiry_files = [f for f in out.inquiry_files if f.doc_type != "pricing_sheet"]
+    return out
 
 
 @router.put("/{order_id}", response_model=FormalOrderOut)
