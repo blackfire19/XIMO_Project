@@ -139,7 +139,7 @@
         type="info"
         show-icon
         banner
-        message="订单已进入出运阶段，以下归档文件已锁定，仅可查看。如需补充，请使用下方「补充附件」。"
+        :message="lockNotice"
         style="margin-bottom:12px"
       />
       <a-row :gutter="16">
@@ -147,7 +147,7 @@
           <a-card size="small" :title="dt.label" style="margin-bottom:16px">
             <template #extra>
               <a-upload
-                v-if="canEdit && !locked"
+                v-if="canManageDoc(dt.key)"
                 :before-upload="(f) => beforeUpload(f, dt.key)"
                 :show-upload-list="false"
               >
@@ -161,7 +161,7 @@
                 <a-list-item>
                   <a :href="`/uploads/${item.file_path}`" target="_blank">{{ item.file_name }}</a>
                   <template #actions>
-                    <a-popconfirm v-if="canEdit && !locked" title="删除？" @confirm="delFile(item.id)">
+                    <a-popconfirm v-if="canManageDoc(dt.key)" title="删除？" @confirm="delFile(item.id)">
                       <a style="color:#ff4d4f">删除</a>
                     </a-popconfirm>
                   </template>
@@ -397,6 +397,20 @@ const canEdit = computed(() => {
   return false
 })
 
+// 出运阶段例外：CO 原产地证、海运提单通常出运后才出具，shipping 状态仍可上传/删除
+const SHIPPING_STAGE_DOCS = ['co', 'ocean_bl']
+function canManageDoc(key) {
+  if (!canEdit.value) return false
+  if (!locked.value) return true
+  return order.value?.status === 'shipping' && SHIPPING_STAGE_DOCS.includes(key)
+}
+
+const lockNotice = computed(() =>
+  order.value?.status === 'shipping'
+    ? '订单已进入出运阶段，归档文件已锁定仅可查看；其中「CO 原产地证」「海运提单」在出运阶段仍可上传/删除。其余如需补充，请使用下方「补充附件」。'
+    : '订单已完结，归档文件已锁定，仅可查看。如需补充，请使用下方「补充附件」。'
+)
+
 // 核算工资后，非财务仍可上传/删除补充附件
 const canSupplement = computed(() => {
   if (!order.value) return false
@@ -422,7 +436,7 @@ const locked = computed(() => ['shipping', 'completed'].includes(order.value?.st
 
 const advanceTitle = computed(() => {
   if (nextStatus.value === 'shipping') {
-    return '推进到「出运中」后，已上传的归档文件将被锁定（仅可查看），只能再上传补充附件。确认推进？'
+    return '推进到「出运中」后，已上传的归档文件将被锁定（仅可查看），仅能上传 CO 原产地证及海运提单以及补充附件。确认推进？'
   }
   return `确认将订单推进到「${STATUS_LABEL[nextStatus.value]}」？`
 })
