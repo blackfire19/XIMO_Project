@@ -18,9 +18,21 @@
       </a-alert>
     </div>
 
-    <!-- 发布公告按钮 -->
-    <div v-if="auth.hasRole('boss', 'purchaser', 'super_admin')" class="publish-row">
-      <a-button type="primary" ghost @click="showPublish = true">
+    <!-- 顶部统一操作栏 -->
+    <div
+      v-if="auth.hasRole('boss', 'purchaser', 'super_admin')"
+      class="dash-toolbar"
+    >
+      <a-button
+        v-if="auth.hasRole('boss', 'super_admin')"
+        type="primary"
+        size="large"
+        @click="openBoard"
+      >
+        <template #icon><global-outlined /></template>
+        打开全球业务大屏
+      </a-button>
+      <a-button type="primary" ghost size="large" @click="showPublish = true">
         <template #icon><notification-outlined /></template>
         发布置顶通知
       </a-button>
@@ -385,9 +397,40 @@
       <a-empty description="采购员暂无看板数据" style="margin-top: 48px" />
     </template>
 
-    <!-- 后勤看板（仅公告） -->
+    <!-- ====== 后勤看板 ====== -->
     <template v-else-if="auth.hasRole('logistics')">
-      <a-empty description="后勤暂无看板数据，请前往「正式订单」查看跟单进度" style="margin-top: 48px" />
+      <a-row :gutter="16" class="stat-row">
+        <a-col :span="8">
+          <a-card class="stat-card">
+            <a-statistic
+              title="待补出运单据"
+              :value="logisticsData.pending_docs_count ?? 0"
+              :value-style="{ color: '#fa8c16' }"
+            />
+          </a-card>
+        </a-col>
+      </a-row>
+
+      <a-card size="small" style="margin-top: 16px">
+        <template #title>待补单据清单（缺出口许可证或 CO）</template>
+        <a-empty v-if="!logisticsData.pending_docs_orders?.length" description="暂无待补单据，单据已齐全" />
+        <a-table
+          v-else
+          :data-source="logisticsData.pending_docs_orders"
+          :columns="logisticsDocColumns"
+          :pagination="{ pageSize: 10, showTotal: t => `共 ${t} 条` }"
+          size="small"
+          row-key="id"
+          :custom-row="(record) => ({ onClick: () => $router.push(`/formal-orders/${record.id}`) })"
+          :row-class-name="() => 'clickable-row'"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'missing'">
+              <a-tag v-for="m in record.missing_labels" :key="m" color="error" style="margin: 2px">{{ m }}</a-tag>
+            </template>
+          </template>
+        </a-table>
+      </a-card>
     </template>
 
     <!-- ====== 弹窗：今日有效跟进摘要全部（老板） ====== -->
@@ -525,7 +568,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { NotificationOutlined } from '@ant-design/icons-vue'
+import { NotificationOutlined, GlobalOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { dashboardApi } from '@/api/dashboard'
 import { announcementsApi } from '@/api/announcements'
@@ -540,6 +583,7 @@ const announcements = ref([])
 const bossData = ref({})
 const salesData = ref({})
 const financeData = ref({})
+const logisticsData = ref({})
 
 const showPublish = ref(false)
 const newContent = ref('')
@@ -608,6 +652,24 @@ const orderColumns = [
     key: 'est_ready_date',
     customRender: ({ text }) => text || '-',
   },
+]
+
+const logisticsDocColumns = [
+  { title: '订单号', dataIndex: 'so_number', key: 'so_number' },
+  {
+    title: '客户',
+    key: 'customer',
+    ellipsis: true,
+    customRender: ({ record }) => fmtCustomer(record.contact_name, record.customer_name),
+  },
+  {
+    title: '状态',
+    dataIndex: 'status',
+    key: 'status',
+    width: 100,
+    customRender: ({ text }) => ORDER_STATUS_LABELS[text] || text,
+  },
+  { title: '待补单据', key: 'missing', width: 220 },
 ]
 
 const orderColumnsDetail = [
@@ -734,6 +796,10 @@ const allOrdersData = computed(() => {
   return salesData.value.active_orders || []
 })
 
+function openBoard() {
+  window.open('/board', '_blank')
+}
+
 function scoreClass(score) {
   if (score >= 8) return 'score-high'
   if (score >= 6) return 'score-mid'
@@ -772,6 +838,11 @@ async function loadDashboard() {
     try {
       const res = await dashboardApi.finance()
       financeData.value = res.data
+    } catch {}
+  } else if (auth.hasRole('logistics')) {
+    try {
+      const res = await dashboardApi.logistics()
+      logisticsData.value = res.data
     } catch {}
   }
 }
@@ -885,7 +956,9 @@ onMounted(() => {
   color: #999;
   font-size: 12px;
 }
-.publish-row {
+.dash-toolbar {
+  display: flex;
+  gap: 12px;
   margin-bottom: 16px;
 }
 .stat-row {
@@ -893,6 +966,27 @@ onMounted(() => {
 }
 .stat-card {
   cursor: default;
+}
+
+/* ===== 区域卡片：毛玻璃质感 ===== */
+:deep(.ant-card) {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px -14px rgba(31, 38, 135, 0.22);
+}
+:deep(.ant-card-head) {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+/* 含列表/表格的卡片：保持白色实底，不加毛玻璃，保证内容清晰可读 */
+:deep(.ant-card:has(.ant-list)),
+:deep(.ant-card:has(.ant-table)),
+:deep(.ant-card:has(.ant-empty)) {
+  background: #fff;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .creator-tag {
   margin-left: 8px;

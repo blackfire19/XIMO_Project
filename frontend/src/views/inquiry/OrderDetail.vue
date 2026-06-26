@@ -43,139 +43,215 @@
         : `距预计生产完成还有 ${countdown} 天`"
     />
 
-    <!-- 提单信息（一个订单一张提单） -->
-    <a-card size="small" title="提单信息" style="margin-bottom:16px">
-      <template #extra>
-        <a-space v-if="canEdit">
-          <a-button v-if="!bl" type="primary" size="small" @click="openBL(false)">创建提单</a-button>
-          <template v-else>
-            <a-button size="small" @click="openBL(true)">编辑</a-button>
-            <a-popconfirm title="删除提单将同时删除其下集装箱，确认？" @confirm="delBL">
-              <a-button size="small" danger>删除</a-button>
-            </a-popconfirm>
+    <!-- 整页两栏：左栏全部内容，右栏提单信息（贯穿全高） -->
+    <a-row :gutter="16" class="main-row">
+      <!-- 左栏：全部内容 -->
+      <a-col :span="16">
+        <!-- 节点提醒（提示该节点需准备的文件） -->
+        <a-alert v-if="!isLogistics" :type="reminder.type" show-icon style="margin-bottom:16px" :message="reminder.title">
+          <template #description>
+            <ul style="margin:4px 0 0; padding-left:18px">
+              <li v-for="(item, i) in reminder.items" :key="i" :style="{ color: item.done ? '#52c41a' : '#fa541c' }">
+                {{ item.done ? '✓' : '○' }} {{ item.text }}
+              </li>
+            </ul>
           </template>
-        </a-space>
-      </template>
+        </a-alert>
 
-      <a-empty v-if="!bl" :image="emptyImage" description="暂无提单信息" />
-      <a-descriptions v-else size="small" :column="3" bordered>
-        <a-descriptions-item label="运输方式">
-          <a-tag :color="bl.ship_type === 'bulk' ? 'purple' : 'blue'">
-            {{ bl.ship_type === 'bulk' ? '散货船' : '集装箱' }}
-          </a-tag>
-        </a-descriptions-item>
-        <a-descriptions-item label="船司">{{ bl.carrier || '—' }}</a-descriptions-item>
-        <a-descriptions-item label="提单号">{{ bl.bl_number || '—' }}</a-descriptions-item>
-        <a-descriptions-item v-if="bl.ship_type === 'container'" label="箱型箱量">{{ bl.container_info || '—' }}</a-descriptions-item>
-        <a-descriptions-item label="状态">
-          <a-select
-            v-if="canEdit"
-            :value="bl.status"
-            size="small"
-            style="width:120px"
-            @change="(v) => changeBLStatus(v)"
-          >
-            <a-select-option v-for="(l, k) in BL_STATUS_LABEL" :key="k" :value="k">{{ l }}</a-select-option>
-          </a-select>
-          <span v-else>{{ BL_STATUS_LABEL[bl.status] }}</span>
-        </a-descriptions-item>
-        <a-descriptions-item label="船名航次">{{ bl.vessel_voyage || '—' }}</a-descriptions-item>
-        <a-descriptions-item label="起运港">{{ bl.load_port || '—' }}</a-descriptions-item>
-        <a-descriptions-item label="目的港">{{ bl.discharge_port || '—' }}</a-descriptions-item>
-        <a-descriptions-item label="目的国">{{ bl.discharge_country ? countryLabel(bl.discharge_country) : '—' }}</a-descriptions-item>
-        <a-descriptions-item label="ETD">{{ bl.etd || '—' }}</a-descriptions-item>
-        <a-descriptions-item label="ETA">{{ bl.eta || '—' }}</a-descriptions-item>
-        <a-descriptions-item label="备注">{{ bl.remarks || '—' }}</a-descriptions-item>
-        <template v-if="bl.ship_type === 'bulk'">
-          <a-descriptions-item label="件数">{{ bl.pieces ?? '—' }}</a-descriptions-item>
-          <a-descriptions-item label="重量(MT)">{{ bl.weight_mt ?? '—' }}</a-descriptions-item>
-          <a-descriptions-item label="体积(CBM)">{{ bl.volume_cbm ?? '—' }}</a-descriptions-item>
-        </template>
-      </a-descriptions>
-    </a-card>
+        <!-- 来自询价单的文件（核价单 / PI 最新版本，只读） -->
+        <a-card v-if="!isLogistics" size="small" title="询价单文件（核价单 / PI 最新版本）">
+          <template #extra>
+            <a-button type="link" size="small"
+              @click="$router.push({ name: 'InquiryDetail', params: { id: order.inquiry_id } })">
+              查看询价单 →
+            </a-button>
+          </template>
+          <a-empty v-if="!order.inquiry_files || order.inquiry_files.length === 0"
+            :image="emptyImage" description="询价单暂无核价单 / PI" />
+          <a-list v-else size="small" :data-source="order.inquiry_files" style="max-height:260px; overflow-y:auto">
+            <template #renderItem="{ item }">
+              <a-list-item>
+                <a-list-item-meta>
+                  <template #title>
+                    <a-tag :color="item.doc_type === 'pricing_sheet' ? 'blue' : 'purple'">
+                      {{ item.doc_type === 'pricing_sheet' ? '核价单' : 'PI' }}
+                    </a-tag>
+                    <a :href="`/uploads/${item.file_path}`" target="_blank">{{ item.file_name }}</a>
+                    <a-tag color="green" style="margin-left:8px">v{{ item.version }}</a-tag>
+                  </template>
+                  <template #description>{{ (item.uploaded_at || '').slice(0,10) }}</template>
+                </a-list-item-meta>
+              </a-list-item>
+            </template>
+          </a-list>
+        </a-card>
 
-    <!-- 节点提醒（紧贴文件归档，提示该节点需准备的文件） -->
-    <a-alert :type="reminder.type" show-icon style="margin:16px 0" :message="reminder.title">
-      <template #description>
-        <ul style="margin:4px 0 0; padding-left:18px">
-          <li v-for="(item, i) in reminder.items" :key="i" :style="{ color: item.done ? '#52c41a' : '#fa541c' }">
-            {{ item.done ? '✓' : '○' }} {{ item.text }}
-          </li>
-        </ul>
-      </template>
-    </a-alert>
+    <!-- 文件归档 + 财务/后勤单据：左右分区，等高 -->
+    <a-row :gutter="8" class="doc-row-wrap">
+      <!-- 文件归档 -->
+      <a-col v-if="!isLogistics" :span="12">
+        <a-card size="small" title="文件归档" class="doc-card">
+          <template #extra>
+            <span class="doc-count">已上传 {{ archiveUploadedCount }}/{{ DOC_DEFS.length }}</span>
+          </template>
+          <a-alert v-if="locked" type="info" show-icon banner :message="lockNotice" />
+          <div class="doc-list">
+            <div v-for="dt in DOC_DEFS" :key="dt.key" class="doc-row">
+              <span class="doc-dot" :class="has(dt.key) ? 'on' : 'off'">{{ has(dt.key) ? '✓' : '' }}</span>
+              <a v-if="has(dt.key)" class="doc-name doc-name-link" @click="openFilesModal(dt, canManageDoc(dt.key))">{{ dt.label }}</a>
+              <span v-else class="doc-name">{{ dt.label }}</span>
+              <span class="doc-files">
+                <a v-if="has(dt.key)" class="doc-uploaded" @click="openFilesModal(dt, canManageDoc(dt.key))">已上传 {{ filesByType[dt.key].length }} 个</a>
+                <span v-else class="doc-none">未上传</span>
+              </span>
+              <span class="doc-actions">
+                <a-upload v-if="canManageDoc(dt.key)" :before-upload="(f) => beforeUpload(f, dt.key)" :show-upload-list="false">
+                  <a class="doc-up">上传</a>
+                </a-upload>
+              </span>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
 
-    <!-- 来自询价单的文件（核价单 / PI 最新版本，只读） -->
-    <a-card size="small" title="询价单文件（核价单 / PI 最新版本）" style="margin-bottom:16px">
-      <template #extra>
-        <a-button type="link" size="small"
-          @click="$router.push({ name: 'InquiryDetail', params: { id: order.inquiry_id } })">
-          查看询价单 →
-        </a-button>
-      </template>
-      <a-empty v-if="!order.inquiry_files || order.inquiry_files.length === 0"
-        :image="emptyImage" description="询价单暂无核价单 / PI" />
-      <a-list v-else size="small" :data-source="order.inquiry_files">
-        <template #renderItem="{ item }">
-          <a-list-item>
-            <a-list-item-meta>
-              <template #title>
-                <a-tag :color="item.doc_type === 'pricing_sheet' ? 'blue' : 'purple'">
-                  {{ item.doc_type === 'pricing_sheet' ? '核价单' : 'PI' }}
+      <!-- 财务 / 后勤单据（非后勤角色：业务员上传，财务后勤下载查看，不受出运锁定） -->
+      <a-col v-if="!isLogistics" :span="12">
+        <a-card size="small" title="财务 / 后勤单据" class="doc-card">
+          <template #extra>
+            <span class="doc-count">已上传 {{ finUploadedCount }}/{{ visibleFinDocs.length }}</span>
+          </template>
+          <div class="doc-list">
+            <div v-for="dt in visibleFinDocs" :key="dt.key" class="doc-row">
+              <span class="doc-dot" :class="has(dt.key) ? 'on' : 'off'">{{ has(dt.key) ? '✓' : '' }}</span>
+              <a v-if="has(dt.key)" class="doc-name doc-name-link" @click="openFilesModal(dt, canManageFinCard(dt.key))">{{ dt.label }}</a>
+              <span v-else class="doc-name">{{ dt.label }}</span>
+              <span class="doc-files">
+                <a v-if="has(dt.key)" class="doc-uploaded" @click="openFilesModal(dt, canManageFinCard(dt.key))">已上传 {{ filesByType[dt.key].length }} 个</a>
+                <span v-else class="doc-none">未上传</span>
+              </span>
+              <span class="doc-actions">
+                <a-upload v-if="canManageFinCard(dt.key)" :before-upload="(f) => beforeUpload(f, dt.key)" :show-upload-list="false">
+                  <a class="doc-up">上传</a>
+                </a-upload>
+              </span>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+
+      <!-- 后勤视角：随附单据（CI/MTC/PL，只读查看） -->
+      <a-col v-if="isLogistics" :span="24" class="logi-stack">
+        <a-card size="small" title="随附单据" class="doc-card">
+          <template #extra>
+            <span class="doc-count">已上传 {{ attachedUploadedCount }}/{{ attachedDocs.length }}</span>
+          </template>
+          <div class="att-grid">
+            <div v-for="dt in attachedDocs" :key="dt.key" class="att-doc" :class="{ done: has(dt.key) }">
+              <div class="att-head">
+                <span class="att-title">
+                  <check-circle-filled v-if="has(dt.key)" class="logi-ok" />
+                  {{ dt.label }}
+                </span>
+                <a-tag :color="has(dt.key) ? 'success' : 'default'" :bordered="false">
+                  {{ has(dt.key) ? '已上传' : '未上传' }}
                 </a-tag>
-                <a :href="`/uploads/${item.file_path}`" target="_blank">{{ item.file_name }}</a>
-                <a-tag color="green" style="margin-left:8px">v{{ item.version }}</a-tag>
-              </template>
-              <template #description>{{ (item.uploaded_at || '').slice(0,10) }}</template>
-            </a-list-item-meta>
-          </a-list-item>
-        </template>
-      </a-list>
-    </a-card>
+              </div>
 
-    <!-- 文件归档 -->
-    <a-card size="small" title="文件归档" :bordered="false" :body-style="{ padding: 0 }">
-      <a-alert
-        v-if="locked"
-        type="info"
-        show-icon
-        banner
-        :message="lockNotice"
-        style="margin-bottom:12px"
-      />
-      <a-row :gutter="16">
-        <a-col v-for="dt in DOC_DEFS" :key="dt.key" :span="6">
-          <a-card size="small" :title="dt.label" style="margin-bottom:16px">
-            <template #extra>
-              <a-upload
-                v-if="canManageDoc(dt.key)"
+              <template v-if="has(dt.key)">
+                <div class="att-thumb">
+                  <a-image
+                    v-if="isImage(filesByType[dt.key][0].file_name)"
+                    :src="`/uploads/${filesByType[dt.key][0].file_path}`"
+                    :width="96"
+                    :height="96"
+                    class="att-thumb-img"
+                  />
+                  <a v-else :href="`/uploads/${filesByType[dt.key][0].file_path}`" target="_blank" class="att-thumb-file" :title="`预览 ${filesByType[dt.key][0].file_name}`">
+                    <file-pdf-outlined v-if="isPdf(filesByType[dt.key][0].file_name)" />
+                    <file-text-outlined v-else />
+                  </a>
+                </div>
+                <div class="att-file-row">
+                  <a :href="`/uploads/${filesByType[dt.key][0].file_path}`" target="_blank" class="att-file-name" :title="filesByType[dt.key][0].file_name">
+                    {{ filesByType[dt.key][0].file_name }}
+                  </a>
+                  <a :href="`/uploads/${filesByType[dt.key][0].file_path}`" :download="filesByType[dt.key][0].file_name" class="att-dl">下载</a>
+                </div>
+              </template>
+              <div v-else class="att-empty">未上传</div>
+            </div>
+          </div>
+        </a-card>
+
+        <!-- 后勤视角：后勤单据（出口许可证 / CO，卡片式拖拽上传） -->
+        <a-card size="small" title="后勤单据" class="doc-card logi-card" style="margin-top:8px">
+          <template #extra>
+            <span class="doc-count">已上传 {{ logiUploadedCount }}/{{ logisticsDocs.length }}</span>
+          </template>
+          <div class="logi-grid">
+            <div v-for="dt in logisticsDocs" :key="dt.key" class="att-doc" :class="{ done: has(dt.key) }">
+              <div class="att-head">
+                <span class="att-title">
+                  <check-circle-filled v-if="has(dt.key)" class="logi-ok" />
+                  {{ dt.label }}
+                </span>
+                <a-tag :color="has(dt.key) ? 'success' : 'default'" :bordered="false">
+                  {{ has(dt.key) ? '已上传' : '未上传' }}
+                </a-tag>
+              </div>
+
+              <!-- 已上传：单文件缩略图 + 文件名 + 删除（删除后才能重新上传） -->
+              <template v-if="has(dt.key)">
+                <div class="att-thumb">
+                  <a-image
+                    v-if="isImage(filesByType[dt.key][0].file_name)"
+                    :src="`/uploads/${filesByType[dt.key][0].file_path}`"
+                    :width="96"
+                    :height="96"
+                    class="att-thumb-img"
+                  />
+                  <a v-else :href="`/uploads/${filesByType[dt.key][0].file_path}`" target="_blank" class="att-thumb-file" :title="`预览 ${filesByType[dt.key][0].file_name}`">
+                    <file-pdf-outlined v-if="isPdf(filesByType[dt.key][0].file_name)" />
+                    <file-text-outlined v-else />
+                  </a>
+                </div>
+                <div class="att-file-row">
+                  <a :href="`/uploads/${filesByType[dt.key][0].file_path}`" target="_blank" class="att-file-name" :title="filesByType[dt.key][0].file_name">
+                    {{ filesByType[dt.key][0].file_name }}
+                  </a>
+                  <a-popconfirm
+                    v-if="canManageFinCard(dt.key)"
+                    title="删除后可重新上传，确认删除？"
+                    ok-text="删除"
+                    cancel-text="取消"
+                    @confirm="delFile(filesByType[dt.key][0].id)"
+                  >
+                    <delete-outlined class="att-del" />
+                  </a-popconfirm>
+                </div>
+              </template>
+
+              <!-- 未上传：拖拽上传区（仅在无文件时显示） -->
+              <a-upload-dragger
+                v-else-if="canManageFinCard(dt.key)"
                 :before-upload="(f) => beforeUpload(f, dt.key)"
                 :show-upload-list="false"
+                class="logi-dragger"
+                accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.bmp,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
               >
-                <a-button type="link" size="small">上传</a-button>
-              </a-upload>
-            </template>
-            <a-empty v-if="!filesByType[dt.key] || filesByType[dt.key].length === 0"
-              :image="emptyImage" description="暂无" />
-            <a-list v-else size="small" :data-source="filesByType[dt.key]">
-              <template #renderItem="{ item }">
-                <a-list-item>
-                  <a :href="`/uploads/${item.file_path}`" target="_blank">{{ item.file_name }}</a>
-                  <template #actions>
-                    <a-popconfirm v-if="canManageDoc(dt.key)" title="删除？" @confirm="delFile(item.id)">
-                      <a style="color:#ff4d4f">删除</a>
-                    </a-popconfirm>
-                  </template>
-                </a-list-item>
-              </template>
-            </a-list>
-          </a-card>
-        </a-col>
-      </a-row>
-    </a-card>
+                <p class="logi-drag-icon"><inbox-outlined /></p>
+                <p class="logi-drag-text">点击或拖拽文件到此处上传</p>
+                <p class="logi-drag-hint">支持 PDF、图片及 Office 文档</p>
+              </a-upload-dragger>
+              <div v-else class="att-empty">暂无文件</div>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
+    </a-row>
 
     <!-- 补充附件（出运锁定后显示，用于补充说明） -->
-    <a-card v-if="locked" size="small" title="补充附件（补充说明，不受出运锁定限制）" style="margin-top:8px">
+    <a-card v-if="locked && !isLogistics" size="small" title="补充附件（补充说明，不受出运锁定限制）" style="margin-top:8px">
       <template #extra>
         <a-popconfirm
           v-if="canSupplement"
@@ -190,7 +266,7 @@
       </template>
       <a-empty v-if="!filesByType.supplement || filesByType.supplement.length === 0"
         :image="emptyImage" description="暂无补充附件" />
-      <a-list v-else size="small" :data-source="filesByType.supplement">
+      <a-list v-else size="small" :data-source="filesByType.supplement" style="max-height:260px; overflow-y:auto">
         <template #renderItem="{ item }">
           <a-list-item>
             <a :href="`/uploads/${item.file_path}`" target="_blank">{{ item.file_name }}</a>
@@ -201,7 +277,7 @@
     </a-card>
 
     <!-- 提单 编辑/创建 modal -->
-    <a-modal v-model:open="blOpen" :title="blEditing ? '编辑提单' : '创建提单'" width="640" :confirm-loading="saving" @ok="submitBL" @cancel="blEditing = false">
+    <a-modal v-model:open="blOpen" :title="blEditing ? '编辑提单' : '创建提单'" :width="640" :confirm-loading="saving" @ok="submitBL" @cancel="blEditing = false">
       <a-form v-if="blForm" layout="vertical">
         <a-form-item label="运输方式">
           <a-radio-group v-model:value="blForm.ship_type">
@@ -211,12 +287,10 @@
         </a-form-item>
         <a-row :gutter="12">
           <a-col :span="12"><a-form-item label="船司"><a-input v-model:value="blForm.carrier" placeholder="如 MAERSK、COSCO" /></a-form-item></a-col>
-          <a-col :span="12"><a-form-item label="提单号"><a-input v-model:value="blForm.bl_number" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="提单号" required><a-input v-model:value="blForm.bl_number" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="船名航次"><a-input v-model:value="blForm.vessel_voyage" /></a-form-item></a-col>
-          <a-col :span="12"><a-form-item label="起运港"><a-input v-model:value="blForm.load_port" placeholder="如 Shanghai" /></a-form-item></a-col>
-          <a-col :span="12"><a-form-item label="目的港"><a-input v-model:value="blForm.discharge_port" placeholder="如 Hamburg" /></a-form-item></a-col>
           <a-col :span="12">
-            <a-form-item label="目的国">
+            <a-form-item label="目的国" required>
               <a-select
                 v-model:value="blForm.discharge_country"
                 show-search
@@ -228,6 +302,8 @@
               />
             </a-form-item>
           </a-col>
+          <a-col :span="12"><a-form-item label="起运港" required><a-input v-model:value="blForm.load_port" placeholder="如 Shanghai" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="目的港" required><a-input v-model:value="blForm.discharge_port" placeholder="如 Hamburg" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="ETD"><a-date-picker v-model:value="blForm.etd" style="width:100%" value-format="YYYY-MM-DD" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="ETA"><a-date-picker v-model:value="blForm.eta" style="width:100%" value-format="YYYY-MM-DD" /></a-form-item></a-col>
           <a-col v-if="blForm.ship_type === 'container'" :span="24">
@@ -247,6 +323,36 @@
 
         <a-form-item label="备注"><a-textarea v-model:value="blForm.remarks" :rows="2" /></a-form-item>
       </a-form>
+    </a-modal>
+
+    <!-- 单据附件 查看 modal（点击文件名打开，展示该单据全部附件） -->
+    <a-modal
+      v-model:open="filesModalOpen"
+      :title="filesModalDoc ? `${filesModalDoc.label} — 已上传附件` : '已上传附件'"
+      :footer="null"
+      :width="560"
+    >
+      <a-list
+        size="small"
+        :data-source="filesModalDoc ? (filesByType[filesModalDoc.key] || []) : []"
+        :locale="{ emptyText: '暂无附件' }"
+      >
+        <template #renderItem="{ item }">
+          <a-list-item>
+            <span class="modal-file-name">
+              <a v-if="isPreviewable(item.file_name)" :href="`/uploads/${item.file_path}`" target="_blank">{{ item.file_name }}</a>
+              <a v-else :href="`/uploads/${item.file_path}`" :download="item.file_name">{{ item.file_name }}</a>
+            </span>
+            <template #actions>
+              <a v-if="isPreviewable(item.file_name)" :href="`/uploads/${item.file_path}`" target="_blank">预览</a>
+              <a :href="`/uploads/${item.file_path}`" :download="item.file_name">下载</a>
+              <a-popconfirm v-if="filesModalDoc && filesModalDoc.canManage" title="确认删除该附件？" @confirm="delFile(item.id)">
+                <a style="color:#ff4d4f">删除</a>
+              </a-popconfirm>
+            </template>
+          </a-list-item>
+        </template>
+      </a-list>
     </a-modal>
 
     <!-- 订单主题 编辑 modal -->
@@ -287,7 +393,7 @@
         </a-space>
       </template>
 
-      <a-empty v-if="!accountingRecord" description="暂无记账记录" />
+      <a-empty v-if="!accountingRecord" :image="emptyImage" description="暂无记账记录" />
       <a-descriptions v-else size="small" :column="3" bordered>
         <a-descriptions-item label="本单利润（CNY）">
           <span :style="{ fontWeight: 700, color: accountingRecord.profit == null ? '#999' : accountingRecord.profit >= 0 ? '#52c41a' : '#ff4d4f' }">
@@ -352,14 +458,70 @@
       </a-form>
     </a-modal>
 
-    <!-- 评价记录 -->
-    <a-card v-if="order" size="small" style="margin-top: 16px">
-      <EvaluationPanel
-        target-type="formal_order"
-        :target-id="order.id"
-        :subject-id="order.salesperson.id"
-      />
-    </a-card>
+      </a-col>
+
+      <!-- 右栏：提单信息 + 评价记录 -->
+      <a-col :span="8">
+        <a-card size="small" title="提单信息" class="bl-card">
+          <template #extra>
+            <a-space v-if="canEdit">
+              <a-button v-if="!bl" type="primary" size="small" @click="openBL(false)">创建提单</a-button>
+              <template v-else>
+                <a-button size="small" @click="openBL(true)">编辑</a-button>
+                <a-popconfirm title="删除提单将同时删除其下集装箱，确认？" @confirm="delBL">
+                  <a-button size="small" danger>删除</a-button>
+                </a-popconfirm>
+              </template>
+            </a-space>
+          </template>
+
+          <a-empty v-if="!bl" :image="emptyImage" description="暂无提单信息" />
+          <a-descriptions v-else size="small" :column="1" bordered>
+            <a-descriptions-item label="运输方式">
+              <a-tag :color="bl.ship_type === 'bulk' ? 'purple' : 'blue'">
+                {{ bl.ship_type === 'bulk' ? '散货船' : '集装箱' }}
+              </a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="船司">{{ bl.carrier || '—' }}</a-descriptions-item>
+            <a-descriptions-item label="提单号">{{ bl.bl_number || '—' }}</a-descriptions-item>
+            <a-descriptions-item v-if="bl.ship_type === 'container'" label="箱型箱量">{{ bl.container_info || '—' }}</a-descriptions-item>
+            <a-descriptions-item label="状态">
+              <a-select
+                v-if="canEdit"
+                :value="bl.status"
+                size="small"
+                style="width:120px"
+                @change="(v) => changeBLStatus(v)"
+              >
+                <a-select-option v-for="(l, k) in BL_STATUS_LABEL" :key="k" :value="k">{{ l }}</a-select-option>
+              </a-select>
+              <span v-else>{{ BL_STATUS_LABEL[bl.status] }}</span>
+            </a-descriptions-item>
+            <a-descriptions-item label="船名航次">{{ bl.vessel_voyage || '—' }}</a-descriptions-item>
+            <a-descriptions-item label="起运港">{{ bl.load_port || '—' }}</a-descriptions-item>
+            <a-descriptions-item label="目的港">{{ bl.discharge_port || '—' }}</a-descriptions-item>
+            <a-descriptions-item label="目的国">{{ bl.discharge_country ? countryLabel(bl.discharge_country) : '—' }}</a-descriptions-item>
+            <a-descriptions-item label="ETD">{{ bl.etd || '—' }}</a-descriptions-item>
+            <a-descriptions-item label="ETA">{{ bl.eta || '—' }}</a-descriptions-item>
+            <a-descriptions-item label="备注">{{ bl.remarks || '—' }}</a-descriptions-item>
+            <template v-if="bl.ship_type === 'bulk'">
+              <a-descriptions-item label="件数">{{ bl.pieces ?? '—' }}</a-descriptions-item>
+              <a-descriptions-item label="重量(MT)">{{ bl.weight_mt ?? '—' }}</a-descriptions-item>
+              <a-descriptions-item label="体积(CBM)">{{ bl.volume_cbm ?? '—' }}</a-descriptions-item>
+            </template>
+          </a-descriptions>
+        </a-card>
+
+        <!-- 评价记录 -->
+        <a-card v-if="order && !isLogistics" size="small" style="margin-top:16px">
+          <EvaluationPanel
+            target-type="formal_order"
+            :target-id="order.id"
+            :subject-id="order.salesperson.id"
+          />
+        </a-card>
+      </a-col>
+    </a-row>
   </div>
 </template>
 
@@ -367,6 +529,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { message, Empty } from 'ant-design-vue'
+import { InboxOutlined, FileTextOutlined, FilePdfOutlined, DeleteOutlined, CheckCircleFilled } from '@ant-design/icons-vue'
 import { formalOrdersApi } from '@/api/inquiries'
 import { accountingApi } from '@/api/accounting'
 import { useAuthStore } from '@/stores/auth'
@@ -377,6 +540,20 @@ import EvaluationPanel from '@/components/EvaluationPanel.vue'
 const route = useRoute()
 const auth = useAuthStore()
 const emptyImage = Empty.PRESENTED_IMAGE_SIMPLE
+
+// 图片 / PDF 可预览，其余只能下载
+const PREVIEW_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'pdf']
+function isPreviewable(name) {
+  const ext = (name || '').split('.').pop().toLowerCase()
+  return PREVIEW_EXTS.includes(ext)
+}
+const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']
+function isImage(name) {
+  return IMAGE_EXTS.includes((name || '').split('.').pop().toLowerCase())
+}
+function isPdf(name) {
+  return (name || '').split('.').pop().toLowerCase() === 'pdf'
+}
 
 const STATUS_LABEL = {
   confirmed: '已确认', production: '生产中', ready: '待出运',
@@ -389,15 +566,25 @@ const STATUS_COLOR = {
 const BL_STATUS_LABEL = { planned: '计划中', loaded: '已装柜', transit: '运输中', arrived: '已到港' }
 
 const DOC_DEFS = [
+  { key: 'ci', label: 'CI 商业发票' },
   { key: 'mtc', label: 'MTC 质保书' },
   { key: 'pl', label: 'PL 装箱单' },
-  { key: 'ci', label: 'CI 商业发票' },
-  { key: 'co', label: 'CO 原产地证' },
-  { key: 'export_permit', label: '出口许可证' },
   { key: 'inspection', label: '验货照片' },
   { key: 'packing', label: '装箱照片' },
   { key: 'ocean_bl', label: '海运提单' },
 ]
+
+// 财务 / 后勤单据区：fin_* 与报关单由业务员上传；出口许可证、CO 沿用各自归档权限
+const FIN_DOC_DEFS = [
+  { key: 'fin_ci', label: 'CI 商业发票' },
+  { key: 'fin_mtc', label: 'MTC 质保书' },
+  { key: 'fin_pl', label: 'PL 装箱单' },
+  { key: 'customs_declaration', label: '报关单' },
+  { key: 'export_permit', label: '出口许可证' },
+  { key: 'co', label: 'CO 原产地证' },
+]
+// 这两项移入本区显示，但权限/锁定沿用归档逻辑（canManageDoc）
+const FIN_DOC_ARCHIVE_KEYS = ['export_permit', 'co']
 
 const order = ref(null)
 const bl = computed(() => order.value?.bls?.[0] || null)
@@ -412,17 +599,49 @@ const canEdit = computed(() => {
   return false
 })
 
-// 出运阶段例外：CO 原产地证、海运提单通常出运后才出具，shipping 状态仍可上传/删除
-const SHIPPING_STAGE_DOCS = ['co', 'ocean_bl']
+// CO 原产地证 / 出口许可证：后勤单据，后勤+超管可维护，不受出运/工资核算锁定
+// （这两类单据通常出运阶段或出运后才出具，出运中/已完结仍需补传）
+const canEditLogisticsDoc = computed(() => auth.hasRole('super_admin', 'logistics'))
+
+// 出运阶段例外：海运提单通常出运后才出具，shipping 状态仍可上传/删除
+const SHIPPING_STAGE_DOCS = ['ocean_bl']
 function canManageDoc(key) {
+  if (key === 'co' || key === 'export_permit') return canEditLogisticsDoc.value
   if (!canEdit.value) return false
   if (!locked.value) return true
   return order.value?.status === 'shipping' && SHIPPING_STAGE_DOCS.includes(key)
 }
 
+// 后勤严格受限：仅可见 fin CI/MTC、出口许可证、CO；其余单据区域全部隐藏
+const isLogistics = computed(() => auth.hasRole('logistics'))
+const visibleFinDocs = computed(() =>
+  isLogistics.value
+    ? FIN_DOC_DEFS.filter(d => ['fin_ci', 'fin_mtc', 'fin_pl', 'export_permit', 'co'].includes(d.key))
+    : FIN_DOC_DEFS
+)
+
+// 后勤视角专用分区：随附单据（CI/MTC/PL，后勤只读查看）+ 后勤单据（出口许可证/CO，后勤上传）
+const ATTACHED_DOC_KEYS = ['fin_ci', 'fin_mtc', 'fin_pl']
+const LOGI_DOC_KEYS = ['export_permit', 'co']
+const attachedDocs = computed(() => FIN_DOC_DEFS.filter(d => ATTACHED_DOC_KEYS.includes(d.key)))
+const logisticsDocs = computed(() => FIN_DOC_DEFS.filter(d => LOGI_DOC_KEYS.includes(d.key)))
+
+// 财务 / 后勤单据：由业务员上传维护（财务、后勤仅下载查看），不受锁定限制
+function canManageFinDoc() {
+  if (!order.value) return false
+  if (auth.hasRole('super_admin')) return true
+  if (auth.hasRole('salesperson')) return order.value.salesperson.id === auth.user?.id
+  return false
+}
+
+// 财务 / 后勤单据区的上传/删除权限：出口许可证、CO 沿用归档权限，其余走 fin 权限
+function canManageFinCard(key) {
+  return FIN_DOC_ARCHIVE_KEYS.includes(key) ? canManageDoc(key) : canManageFinDoc()
+}
+
 const lockNotice = computed(() =>
   order.value?.status === 'shipping'
-    ? '订单已进入出运阶段，归档文件已锁定仅可查看；其中「CO 原产地证」「海运提单」在出运阶段仍可上传/删除。其余如需补充，请使用下方「补充附件」。'
+    ? '订单已进入出运阶段，归档文件已锁定仅可查看；其中「海运提单」在出运阶段仍可上传/删除，「CO 原产地证」「出口许可证」请在下方「财务 / 后勤单据」区维护。其余如需补充，请使用下方「补充附件」。'
     : '订单已完结，归档文件已锁定，仅可查看。如需补充，请使用下方「补充附件」。'
 )
 
@@ -451,7 +670,7 @@ const locked = computed(() => ['shipping', 'completed'].includes(order.value?.st
 
 const advanceTitle = computed(() => {
   if (nextStatus.value === 'shipping') {
-    return '推进到「出运中」后，已上传的归档文件将被锁定（仅可查看），仅能上传 CO 原产地证及海运提单以及补充附件。确认推进？'
+    return '推进到「出运中」后，已上传的归档文件将被锁定（仅可查看），仅能上传海运提单、「财务 / 后勤单据」区（CO、出口许可证等）以及补充附件。确认推进？'
   }
   return `确认将订单推进到「${STATUS_LABEL[nextStatus.value]}」？`
 })
@@ -474,6 +693,12 @@ const filesByType = computed(() => {
   return map
 })
 function has(key) { return (filesByType.value[key] || []).length > 0 }
+
+// 紧凑列表顶部「已上传 X/N」计数（无进度条）
+const archiveUploadedCount = computed(() => DOC_DEFS.filter(d => has(d.key)).length)
+const finUploadedCount = computed(() => visibleFinDocs.value.filter(d => has(d.key)).length)
+const attachedUploadedCount = computed(() => attachedDocs.value.filter(d => has(d.key)).length)
+const logiUploadedCount = computed(() => logisticsDocs.value.filter(d => has(d.key)).length)
 
 const reminder = computed(() => {
   const s = order.value?.status
@@ -665,6 +890,15 @@ async function delFile(fileId) {
 }
 
 // ── 提单 ──
+// 单据附件查看 modal
+const filesModalOpen = ref(false)
+const filesModalDoc = ref(null) // { key, label, canManage }
+function openFilesModal(dt, canManage) {
+  if (!has(dt.key)) return
+  filesModalDoc.value = { key: dt.key, label: dt.label, canManage }
+  filesModalOpen.value = true
+}
+
 const blOpen = ref(false)
 const blEditing = ref(false)
 const saving = ref(false)
@@ -699,9 +933,13 @@ function openBL(editing) {
 }
 
 async function submitBL() {
+  const f = blForm.value
+  if (!f.bl_number || !f.bl_number.trim()) { message.warning('请填写提单号'); return }
+  if (!f.discharge_country) { message.warning('请选择目的国'); return }
+  if (!f.discharge_port || !f.discharge_port.trim()) { message.warning('请填写目的港'); return }
+  if (!f.load_port || !f.load_port.trim()) { message.warning('请填写起运港'); return }
   saving.value = true
   try {
-    const f = blForm.value
     const payload = {
       ship_type: f.ship_type,
       carrier: f.carrier || null,
@@ -748,3 +986,191 @@ async function delBL() {
 
 onMounted(load)
 </script>
+
+<style scoped>
+/* 文件归档 / 财务后勤：左右分区等高 */
+.doc-row-wrap { margin-top: 8px; }
+.doc-row-wrap > .ant-col { display: flex; }
+.doc-card { width: 100%; height: 100%; }
+/* 紧凑列表：一行一单据 */
+.doc-card :deep(.ant-card-body) { padding: 0; }
+/* 单据较多时内部滚动 */
+.doc-list { max-height: 320px; overflow-y: auto; }
+.doc-count { font-size: 13px; color: rgba(0, 0, 0, 0.45); }
+.doc-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid #fafafa;
+  transition: background 0.15s;
+}
+.doc-row:first-child { border-top: none; }
+.doc-row:hover { background: #fafbff; }
+.doc-dot {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+.doc-dot.on { background: #52c41a; color: #fff; }
+.doc-dot.off { border: 1.5px solid #ff4d4f; background: #fff; }
+.doc-name { flex: 0 0 130px; font-weight: 500; }
+.doc-name-link { color: #1677ff; cursor: pointer; }
+.doc-name-link:hover { text-decoration: underline; }
+.doc-uploaded { color: #52c41a; cursor: pointer; }
+.doc-uploaded:hover { text-decoration: underline; }
+.modal-file-name { flex: 1 1 auto; min-width: 0; word-break: break-all; }
+.doc-files {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.doc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.doc-chip a { color: #1677ff; }
+.doc-chip-dl { font-size: 12px; }
+.doc-chip-del { color: #ff4d4f; cursor: pointer; font-size: 13px; line-height: 1; }
+.doc-none { color: #ff4d4f; font-size: 13px; }
+.doc-actions { flex: 0 0 auto; }
+.doc-up { color: #1677ff; cursor: pointer; font-size: 13px; }
+
+/* ===== 后勤单据：卡片式拖拽上传 ===== */
+.logi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+.logi-ok { color: #52c41a; font-size: 15px; }
+
+/* 后勤单据卡片与随附单据保持一致的最小高度，未上传/已上传两态等高对齐 */
+.logi-card .att-doc { min-height: 190px; }
+.logi-card .att-doc .att-thumb { flex: 1 1 auto; align-items: center; margin-bottom: 12px; }
+.logi-card .logi-dragger { flex: 1 1 auto; display: flex; }
+.logi-card .logi-dragger :deep(.ant-upload-wrapper),
+.logi-card .logi-dragger :deep(.ant-upload.ant-upload-drag) { width: 100%; height: 100%; }
+
+/* 拖拽上传区：紧凑、柔和 */
+.logi-dragger :deep(.ant-upload.ant-upload-drag) {
+  border: 1.5px dashed #cdd5e3;
+  border-radius: 10px;
+  background: #fbfcfe;
+  transition: border-color 0.2s, background 0.2s;
+}
+.logi-dragger :deep(.ant-upload.ant-upload-drag:hover) {
+  border-color: #1677ff;
+  background: #f3f7ff;
+}
+.logi-dragger :deep(.ant-upload-btn) { padding: 14px 10px; }
+.logi-drag-icon { margin: 0 0 6px; font-size: 30px; color: #9fb4dd; line-height: 1; }
+.logi-drag-text { margin: 0; font-size: 13px; color: #3b4757; font-weight: 500; }
+.logi-drag-hint { margin: 4px 0 0; font-size: 12px; color: rgba(0, 0, 0, 0.4); }
+
+/* 后勤视角：两个区域上下堆叠（覆盖默认横向 flex） */
+.doc-row-wrap > .ant-col.logi-stack { flex-direction: column; }
+.logi-stack .doc-card { height: auto; }
+
+/* ===== 随附单据：单文件直接展开，缩略图 + 预览 + 下载 ===== */
+.att-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+.att-doc {
+  border: 1px solid #eef0f4;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s;
+}
+.att-doc:hover {
+  border-color: #d6e0ff;
+  box-shadow: 0 8px 22px -14px rgba(22, 119, 255, 0.35);
+  transform: translateY(-1px);
+}
+.att-doc.done { border-color: #d3eedd; background: linear-gradient(180deg, #f6fcf8 0%, #ffffff 60%); }
+.att-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.att-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #1f2733;
+}
+.att-thumb {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.att-thumb-img :deep(img),
+.att-thumb-img {
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid #eef0f4;
+  cursor: pointer;
+}
+.att-thumb-file {
+  width: 96px;
+  height: 96px;
+  border-radius: 8px;
+  border: 1px solid #eef0f4;
+  background: #f7f9fc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  color: #8a97ad;
+  transition: color 0.2s, border-color 0.2s;
+}
+.att-thumb-file:hover { color: #1677ff; border-color: #d6e0ff; }
+.att-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+}
+.att-file-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: #1f2733;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.att-file-name:hover { color: #1677ff; text-decoration: underline; }
+.att-dl { flex: 0 0 auto; color: #1677ff; font-size: 13px; }
+.att-dl:hover { text-decoration: underline; }
+.att-del { flex: 0 0 auto; color: #bfbfbf; cursor: pointer; font-size: 14px; transition: color 0.15s; }
+.att-del:hover { color: #ff4d4f; }
+.att-empty { color: #ff4d4f; font-size: 13px; text-align: center; padding: 18px 0; }
+
+/* 压缩空状态：缩小插画、收紧上下间距（含子组件评价记录） */
+:deep(.ant-empty-normal) { margin: 12px 0; }
+:deep(.ant-empty-normal .ant-empty-image) { height: 32px; }
+:deep(.ant-empty-normal .ant-empty-description) { font-size: 12px; color: rgba(0, 0, 0, 0.4); }
+</style>
