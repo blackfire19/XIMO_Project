@@ -32,7 +32,10 @@ def require_lan(request: Request):
         ip = ipaddress.ip_address(host)
     except ValueError:
         raise HTTPException(status_code=403, detail="仅限内网访问")
-    if not (ip.is_private or ip.is_loopback):
+    # 双栈环境下局域网客户端可能以 IPv4-mapped IPv6（::ffff:192.168.x.x）出现，先还原为 IPv4 再判断
+    if getattr(ip, "ipv4_mapped", None) is not None:
+        ip = ip.ipv4_mapped
+    if not (ip.is_private or ip.is_loopback or ip.is_link_local):
         raise HTTPException(status_code=403, detail="仅限内网访问")
 
 
