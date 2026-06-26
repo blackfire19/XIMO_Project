@@ -31,15 +31,20 @@ from app.config import settings
 
 router = APIRouter(prefix="/formal-orders", tags=["正式订单"])
 
-ORDER_DOC_TYPES = {"mtc", "pl", "ci", "co", "export_permit", "inspection", "packing", "ocean_bl", "supplement"}
+# 财务 / 后勤单据：独立于业务员归档，财务后勤可自行上传，且不受出运/工资核算锁定
+FINANCE_LOGISTICS_DOC_TYPES = {"fin_ci", "fin_mtc", "fin_pl", "customs_declaration"}
+ORDER_DOC_TYPES = {"mtc", "pl", "ci", "co", "export_permit", "inspection", "packing", "ocean_bl", "supplement"} | FINANCE_LOGISTICS_DOC_TYPES
 ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".xlsx", ".xls", ".docx", ".doc"}
 
 # 补充附件：不受出运锁定限制，任何状态均可上传/删除
 SUPPLEMENT_DOC_TYPE = "supplement"
+# CO 原产地证 / 出口许可证：后勤单据，通常出运阶段或出运后才出具，
+# 由后勤+超管维护，完全不受出运/工资核算锁定（出运中、已完结仍可补传/替换）
+LOGISTICS_MANAGED_DOC_TYPES = {"co", "export_permit"}
 # 进入这些状态后，正式归档文件只读（仅可查看），不能再上传/删除
 FILE_LOCK_STATUSES = {"shipping", "completed"}
-# 出运阶段例外：CO 原产地证、海运提单通常出运后才出具，故 shipping 状态仍允许上传/删除
-SHIPPING_STAGE_DOC_TYPES = {"co", "ocean_bl"}
+# 出运阶段例外：海运提单通常出运后才出具，故 shipping 状态仍允许上传/删除
+SHIPPING_STAGE_DOC_TYPES = {"ocean_bl"}
 
 
 def _next_status(order: FormalOrder) -> str | None:
@@ -86,6 +91,26 @@ def _can_edit(user: User, order: FormalOrder) -> bool:
     if role == "salesperson":
         return order.salesperson_id == user.id and order.status != "completed"
     return False
+
+
+def _can_manage_fin_doc(user: User, order: FormalOrder) -> bool:
+    """财务 / 后勤单据：由业务员上传维护（财务、后勤仅下载查看），不受出运/工资核算锁定"""
+    role = user.role.name
+    if role == "super_admin":
+        return True
+    if role == "salesperson":
+        return order.salesperson_id == user.id
+    return False
+
+
+# 后勤可在订单详情页查看/管理的单据范围（严格受限）
+LOGISTICS_VISIBLE_DOC_TYPES = {"fin_ci", "fin_mtc", "fin_pl", "export_permit", "co"}
+
+
+def _can_manage_logistics_doc(user: User, order: FormalOrder) -> bool:
+    """CO 原产地证 / 出口许可证：后勤单据，由后勤+超管维护，不受出运/工资核算锁定。
+    这两类单据通常在出运阶段或出运后才出具，故出运中/已完结仍可补传或替换。"""
+    return user.role.name in ("super_admin", "logistics")
 
 
 def _gen_so_number(db: Session, salesperson: User) -> str:
@@ -170,6 +195,7 @@ def list_orders(
     salesperson_id: Optional[int] = Query(None),
     has_accounting: Optional[bool] = Query(None),
     salary_calculated: Optional[bool] = Query(None),
+    upload_status: Optional[str] = Query(None),  # 后勤：all/partial/none（出口许可证+CO）
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -207,6 +233,19 @@ def list_orders(
             q = q.filter(
                 (AccountingRecord.id == None) | (AccountingRecord.salary_calculated == False)
             )
+    # 后勤上传状态筛选：基于出口许可证(export_permit) + CO(co) 是否齐全
+    if upload_status in ("all", "partial", "none"):
+        co_ids = db.query(OrderFile.order_id).filter(OrderFile.doc_type == "co")
+        ep_ids = db.query(OrderFile.order_id).filter(OrderFile.doc_type == "export_permit")
+        if upload_status == "all":
+            q = q.filter(FormalOrder.id.in_(co_ids), FormalOrder.id.in_(ep_ids))
+        elif upload_status == "none":
+            q = q.filter(FormalOrder.id.notin_(co_ids), FormalOrder.id.notin_(ep_ids))
+        else:  # partial：恰好缺其中之一
+            q = q.filter(
+                ((FormalOrder.id.in_(co_ids)) & (FormalOrder.id.notin_(ep_ids)))
+                | ((FormalOrder.id.notin_(co_ids)) & (FormalOrder.id.in_(ep_ids)))
+            )
     total = q.count()
     # 全量利润合计（所有筛选条件下，跨所有分页）
     profit_total_row = (
@@ -228,6 +267,38 @@ def list_orders(
             it.profit = None
             it.salary_calculated = None
         profit_total = None
+    # 后勤/超管视角：计算出口单据上传状态（export_permit + co）
+    if current_user.role.name in ("logistics", "super_admin"):
+        item_ids = [o.id for o in items]
+        have_map: dict[int, set[str]] = {}
+        if item_ids:
+            rows = (
+                db.query(OrderFile.order_id, OrderFile.doc_type)
+                .filter(
+                    OrderFile.order_id.in_(item_ids),
+                    OrderFile.doc_type.in_(["co", "export_permit"]),
+                )
+                .distinct()
+                .all()
+            )
+            for oid, dt in rows:
+                have_map.setdefault(oid, set()).add(dt)
+        for it in item_out:
+            have = have_map.get(it.id, set())
+            has_co = "co" in have
+            has_ep = "export_permit" in have
+            missing = []
+            if not has_ep:
+                missing.append("export_permit")
+            if not has_co:
+                missing.append("co")
+            it.missing_docs = missing
+            if not missing:
+                it.upload_status = "all"
+            elif has_co or has_ep:
+                it.upload_status = "partial"
+            else:
+                it.upload_status = "none"
     return FormalOrderPage(total=total, page=page, page_size=page_size, items=item_out, profit_total=profit_total)
 
 
@@ -246,8 +317,9 @@ def get_order(
     if current_user.role.name == "logistics":
         out.profit = None
         out.salary_calculated = None
-        # 后勤：屏蔽核价单（含成本），保留 PI 供单据核对
-        out.inquiry_files = [f for f in out.inquiry_files if f.doc_type != "pricing_sheet"]
+        # 后勤严格受限：仅查看 fin CI/MTC、出口许可证、CO，其余单据（询价单文件、归档、报关单、补充附件）全部隐藏
+        out.inquiry_files = []
+        out.files = [f for f in out.files if f.doc_type in LOGISTICS_VISIBLE_DOC_TYPES]
     return out
 
 
@@ -312,20 +384,29 @@ async def upload_order_file(
     order = db.get(FormalOrder, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="订单不存在")
-    salary_locked = _salary_calculated(order)
-    if salary_locked:
-        if current_user.role.name == "finance":
-            raise HTTPException(status_code=403, detail="工资已核算，财务无法修改此订单")
-        if not _can_edit(current_user, order) and doc_type == SUPPLEMENT_DOC_TYPE:
+    if doc_type in LOGISTICS_MANAGED_DOC_TYPES:
+        # CO / 出口许可证：后勤单据，后勤+超管维护，不受出运/工资核算锁定
+        if not _can_manage_logistics_doc(current_user, order):
             raise HTTPException(status_code=403, detail="权限不足")
-        if doc_type != SUPPLEMENT_DOC_TYPE:
-            raise HTTPException(status_code=400, detail="工资已核算，仅可上传补充附件")
+    elif doc_type in FINANCE_LOGISTICS_DOC_TYPES:
+        # 财务 / 后勤单据：独立权限，不受出运/工资核算锁定
+        if not _can_manage_fin_doc(current_user, order):
+            raise HTTPException(status_code=403, detail="权限不足")
     else:
-        if not _can_edit(current_user, order):
-            raise HTTPException(status_code=403, detail="权限不足")
-    shipping_stage_exception = order.status == "shipping" and doc_type in SHIPPING_STAGE_DOC_TYPES
-    if doc_type != SUPPLEMENT_DOC_TYPE and order.status in FILE_LOCK_STATUSES and not shipping_stage_exception:
-        raise HTTPException(status_code=400, detail="订单已进入出运阶段，归档文件已锁定，仅可上传补充附件")
+        salary_locked = _salary_calculated(order)
+        if salary_locked:
+            if current_user.role.name == "finance":
+                raise HTTPException(status_code=403, detail="工资已核算，财务无法修改此订单")
+            if not _can_edit(current_user, order) and doc_type == SUPPLEMENT_DOC_TYPE:
+                raise HTTPException(status_code=403, detail="权限不足")
+            if doc_type != SUPPLEMENT_DOC_TYPE:
+                raise HTTPException(status_code=400, detail="工资已核算，仅可上传补充附件")
+        else:
+            if not _can_edit(current_user, order):
+                raise HTTPException(status_code=403, detail="权限不足")
+        shipping_stage_exception = order.status == "shipping" and doc_type in SHIPPING_STAGE_DOC_TYPES
+        if doc_type != SUPPLEMENT_DOC_TYPE and order.status in FILE_LOCK_STATUSES and not shipping_stage_exception:
+            raise HTTPException(status_code=400, detail="订单已进入出运阶段，归档文件已锁定，仅可上传补充附件")
 
     original_name = file.filename or "file"
     ext = os.path.splitext(original_name)[1].lower()
@@ -365,19 +446,27 @@ def delete_order_file(
     order = db.get(FormalOrder, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="订单不存在")
-    salary_locked = _salary_calculated(order)
-    if salary_locked:
-        raise HTTPException(status_code=403, detail="工资已核算，文件不可删除")
-    if not _can_edit(current_user, order):
-        raise HTTPException(status_code=403, detail="权限不足")
     rec = db.get(OrderFile, file_id)
     if not rec or rec.order_id != order_id:
         raise HTTPException(status_code=404, detail="文件不存在")
-    if rec.doc_type == SUPPLEMENT_DOC_TYPE:
-        raise HTTPException(status_code=400, detail="补充附件上传后不可删除")
-    shipping_stage_exception = order.status == "shipping" and rec.doc_type in SHIPPING_STAGE_DOC_TYPES
-    if order.status in FILE_LOCK_STATUSES and not shipping_stage_exception:
-        raise HTTPException(status_code=400, detail="订单已进入出运阶段，归档文件已锁定")
+    if rec.doc_type in LOGISTICS_MANAGED_DOC_TYPES:
+        # CO / 出口许可证：后勤单据，后勤+超管维护，不受出运/工资核算锁定
+        if not _can_manage_logistics_doc(current_user, order):
+            raise HTTPException(status_code=403, detail="权限不足")
+    elif rec.doc_type in FINANCE_LOGISTICS_DOC_TYPES:
+        # 财务 / 后勤单据：独立权限，不受出运/工资核算锁定
+        if not _can_manage_fin_doc(current_user, order):
+            raise HTTPException(status_code=403, detail="权限不足")
+    else:
+        if _salary_calculated(order):
+            raise HTTPException(status_code=403, detail="工资已核算，文件不可删除")
+        if not _can_edit(current_user, order):
+            raise HTTPException(status_code=403, detail="权限不足")
+        if rec.doc_type == SUPPLEMENT_DOC_TYPE:
+            raise HTTPException(status_code=400, detail="补充附件上传后不可删除")
+        shipping_stage_exception = order.status == "shipping" and rec.doc_type in SHIPPING_STAGE_DOC_TYPES
+        if order.status in FILE_LOCK_STATUSES and not shipping_stage_exception:
+            raise HTTPException(status_code=400, detail="订单已进入出运阶段，归档文件已锁定")
     full_path = os.path.join(settings.UPLOAD_DIR, rec.file_path)
     db.delete(rec)
     db.commit()

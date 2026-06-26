@@ -225,6 +225,9 @@ class FormalOrderListItem(BaseModel):
     salary_calculated: Optional[bool] = None
     bl_carrier: Optional[str] = None
     bl_number: Optional[str] = None
+    # 后勤视角：出口单据上传状态（all 全部上传 / partial 部分上传 / none 未上传），及缺失单据列表
+    upload_status: Optional[str] = None
+    missing_docs: Optional[list[str]] = None
     model_config = {"from_attributes": True}
 
 

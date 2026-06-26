@@ -34,8 +34,8 @@
 
     <!-- 评价列表 -->
     <a-spin :spinning="loading">
-      <a-empty v-if="!evaluations.length" description="暂无评价" style="padding: 16px 0" />
-      <div v-else>
+      <a-empty v-if="!evaluations.length" :image="emptyImage" description="暂无评价" />
+      <div v-else class="eval-list">
         <div v-for="ev in evaluations" :key="ev.id" class="eval-item">
           <div class="eval-header">
             <span class="eval-score">
@@ -60,7 +60,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
+import { message, Empty } from 'ant-design-vue'
 import { evaluationsApi } from '@/api/evaluations'
 import { useAuthStore } from '@/stores/auth'
 
@@ -70,6 +70,7 @@ const props = defineProps({
   subjectId: { type: Number, required: true },   // 被评价员工 id
 })
 
+const emptyImage = Empty.PRESENTED_IMAGE_SIMPLE
 const auth = useAuthStore()
 const canEvaluate = auth.hasRole('boss', 'super_admin')
 
@@ -128,6 +129,12 @@ onMounted(load)
 <style scoped>
 .eval-panel {
   margin-top: 8px;
+}
+/* 评价较多时内部滚动，避免撑高整列 */
+.eval-list {
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 .eval-form {
   background: #fafafa;

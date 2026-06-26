@@ -54,7 +54,15 @@
           @clear="() => reload()"
         />
       </a-col>
-      <a-col :span="5">
+      <!-- 后勤：出口单据上传状态筛选（替代合同状态） -->
+      <a-col v-if="isLogistics" :span="5">
+        <a-select v-model:value="filters.upload_status" placeholder="上传状态" allow-clear style="width:100%" @change="() => reload()">
+          <a-select-option value="all">全部上传</a-select-option>
+          <a-select-option value="partial">部分上传</a-select-option>
+          <a-select-option value="none">未上传</a-select-option>
+        </a-select>
+      </a-col>
+      <a-col v-else :span="5">
         <a-select v-model:value="filters.status" placeholder="状态" allow-clear style="width:100%" @change="() => reload()">
           <a-select-option v-for="(label, key) in STATUS_LABEL" :key="key" :value="key">{{ label }}</a-select-option>
         </a-select>
@@ -103,6 +111,14 @@
         </template>
         <template v-else-if="column.key === 'status'">
           <a-tag :color="STATUS_COLOR[record.status]">{{ STATUS_LABEL[record.status] }}</a-tag>
+        </template>
+        <template v-else-if="column.key === 'upload_status'">
+          <a-tag v-if="record.upload_status === 'all'" color="green">全部上传</a-tag>
+          <template v-else-if="record.upload_status === 'partial'">
+            <a-tag color="orange">部分上传</a-tag>
+            <span style="color:#fa8c16; font-size:12px">{{ fmtMissing(record.missing_docs) }}</span>
+          </template>
+          <a-tag v-else color="red">未上传</a-tag>
         </template>
         <template v-else-if="column.key === 'bl_info'">
           <span v-if="record.bl_carrier && record.bl_number">{{ record.bl_carrier }}：{{ record.bl_number }}</span>
@@ -215,6 +231,12 @@ const STATUS_COLOR = {
   shipping: 'cyan', completed: 'green',
 }
 
+const DOC_MISSING_LABEL = { export_permit: '未上传出口许可证书', co: '未上传CO' }
+function fmtMissing(missing) {
+  if (!missing || !missing.length) return ''
+  return missing.map(d => DOC_MISSING_LABEL[d] || d).join('，')
+}
+
 // 列定义
 const baseColumns = [
   { title: '主题 / 订单号', dataIndex: 'so_number', key: 'so_number' },
@@ -233,10 +255,12 @@ const blColumn = { title: '提单信息', key: 'bl_info' }
 const profitColumn = { title: '利润（CNY）', key: 'profit', width: 140, align: 'right' }
 const salaryColumn = { title: '工资发放', key: 'salary_calculated', width: 90, align: 'center' }
 const actionColumn = { title: '操作', key: 'action', width: 80 }
+const uploadStatusColumn = { title: '出口单据', key: 'upload_status', width: 220 }
 
 const columns = computed(() => [
   ...baseColumns,
-  ...(isFinance ? [] : normalColumns),
+  ...(isFinance || isLogistics ? [] : normalColumns),
+  ...(isLogistics ? [uploadStatusColumn] : []),
   blColumn,
   timeColumn,
   ...(isLogistics ? [] : [profitColumn]),
@@ -314,6 +338,7 @@ const filters = ref({
   has_accounting: isBossOrAdmin ? true : null,  // 老板/超管默认显示已核算利润
   salary_calculated: isBossOrAdmin ? false : null,  // 老板/超管默认显示未发工资
   salesperson_id: null,
+  upload_status: null,  // 后勤：出口单据上传状态
 })
 const pagination = ref({ current: 1, pageSize: 10, total: 0, showTotal: t => `共 ${t} 条` })
 
@@ -332,6 +357,9 @@ async function loadData(page = 1) {
     }
     if (canFilterBySalesperson && filters.value.salesperson_id) {
       params.salesperson_id = filters.value.salesperson_id
+    }
+    if (isLogistics && filters.value.upload_status) {
+      params.upload_status = filters.value.upload_status
     }
     const res = await formalOrdersApi.list(params)
     rows.value = res.data.items

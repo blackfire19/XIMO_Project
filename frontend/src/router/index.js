@@ -8,6 +8,12 @@ const routes = [
     meta: { public: true },
   },
   {
+    path: '/board',
+    name: 'WorldMapBoard',
+    component: () => import('@/views/WorldMapBoard.vue'),
+    meta: { public: true },
+  },
+  {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     children: [
@@ -84,8 +90,8 @@ router.beforeEach(async (to) => {
   if (!to.meta.public && !auth.user) {
     return { name: 'Login' }
   }
-  // 已登录用户访问登录页，重定向到首页
-  if (to.meta.public && auth.user) {
+  // 已登录用户访问登录页，重定向到首页（大屏 /board 等公开页不受此限制）
+  if (to.name === 'Login' && auth.user) {
     return { name: 'Dashboard' }
   }
   if (auth.user?.role === 'finance' && !FINANCE_ALLOWED.includes(to.name)) {
