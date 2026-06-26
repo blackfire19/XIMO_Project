@@ -158,7 +158,7 @@ CREATE TABLE quotation_items (
 
 CREATE TABLE orders (
     id              SERIAL PRIMARY KEY,
-    so_number       VARCHAR(50) NOT NULL UNIQUE, -- SO-XIMO{code}YYYYMMDD-序号
+    so_number       VARCHAR(50) NOT NULL UNIQUE, -- XIMO{code}YYYYMMDD序号(两位补零)
     quotation_id    INTEGER REFERENCES quotations(id),  -- 来源 PI（一键转单）
     customer_id     INTEGER NOT NULL REFERENCES customers(id),
     salesperson_id  INTEGER NOT NULL REFERENCES users(id),

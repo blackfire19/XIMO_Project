@@ -116,9 +116,9 @@ def _can_manage_logistics_doc(user: User, order: FormalOrder) -> bool:
 def _gen_so_number(db: Session, salesperson: User) -> str:
     code = salesperson.salesperson_code or "XX"
     today = datetime.now().strftime("%Y%m%d")
-    prefix = f"SO-XIMO{code}{today}-"
+    prefix = f"XIMO{code}{today}"
     used = {
-        int(r[0].split("-")[-1])
+        int(r[0][len(prefix):])
         for r in db.query(FormalOrder.so_number).filter(FormalOrder.so_number.like(f"{prefix}%")).all()
     }
     seq = 1
