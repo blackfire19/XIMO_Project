@@ -93,6 +93,7 @@ const RAW = [
   ['科特迪瓦', "Côte d'Ivoire"],
   ['塞内加尔', 'Senegal'],
   ['马达加斯加', 'Madagascar'],
+  ['毛里求斯', 'Mauritius'],
   ['津巴布韦', 'Zimbabwe'],
   ['纳米比亚', 'Namibia'],
   ['哈萨克斯坦', 'Kazakhstan'],

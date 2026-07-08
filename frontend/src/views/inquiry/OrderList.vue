@@ -334,9 +334,9 @@ const rows = ref([])
 const profitGrandTotal = ref(null)   // 汇总合计（全量）
 const filters = ref({
   so_number: '',
-  status: isFinance ? 'completed' : null,  // 财务默认显示已完结
-  has_accounting: isBossOrAdmin ? true : null,  // 老板/超管默认显示已核算利润
-  salary_calculated: isBossOrAdmin ? false : null,  // 老板/超管默认显示未发工资
+  status: null,
+  has_accounting: null,
+  salary_calculated: null,
   salesperson_id: null,
   upload_status: null,  // 后勤：出口单据上传状态
 })
@@ -384,10 +384,10 @@ function parseTriBool(v) {
 function applyRouteQuery() {
   const q = route.query
   if (isFinance) {
-    if (q.has_accounting !== undefined) filters.value.has_accounting = parseTriBool(q.has_accounting)
-    if (q.salary_calculated !== undefined) filters.value.salary_calculated = parseTriBool(q.salary_calculated)
+    filters.value.status = q.status || null
+    filters.value.has_accounting = q.has_accounting !== undefined ? parseTriBool(q.has_accounting) : null
+    filters.value.salary_calculated = q.salary_calculated !== undefined ? parseTriBool(q.salary_calculated) : null
   } else if (isBossOrAdmin) {
-    // 跳转进入（带 query）按实际显示；直接进入（无 query）默认已记账+未发放
     const isJump = q.status !== undefined || q.has_accounting !== undefined
       || q.salary_calculated !== undefined || q.active !== undefined
     if (isJump) {
@@ -396,8 +396,8 @@ function applyRouteQuery() {
       filters.value.salary_calculated = q.salary_calculated !== undefined ? parseTriBool(q.salary_calculated) : null
     } else {
       filters.value.status = null
-      filters.value.has_accounting = true
-      filters.value.salary_calculated = false
+      filters.value.has_accounting = null
+      filters.value.salary_calculated = null
     }
   } else {
     filters.value.status = q.status || null
