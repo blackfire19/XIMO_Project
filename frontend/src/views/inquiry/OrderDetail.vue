@@ -411,7 +411,7 @@
         <a-descriptions-item label="附件" :span="3">
           <template v-if="accountingRecord.file_name">
             <a :href="`/uploads/${accountingRecord.file_path}`" target="_blank">{{ accountingRecord.file_name }}</a>
-            <a-popconfirm title="删除附件？" @confirm="deleteAccountingFile">
+            <a-popconfirm v-if="!salaryLocked" title="删除附件？" @confirm="deleteAccountingFile">
               <a style="color:#ff4d4f; margin-left:12px">删除</a>
             </a-popconfirm>
           </template>
@@ -815,7 +815,7 @@ async function deleteAccountingFile() {
 async function toggleSalary() {
   const res = await accountingApi.toggleSalary(order.value.id)
   accountingRecord.value = res.data
-  message.success(res.data.salary_calculated ? '已标记为工资发放' : '已取消核算工资标记')
+  message.success('已标记为工资发放')
 }
 
 // ── 补充附件（确认后才触发文件选择） ──

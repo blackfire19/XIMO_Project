@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.deps import get_current_user
 from app.database import get_db
+from app.models.customer import Customer
 from app.models.inquiry import Inquiry, InquiryFile, FormalOrder
 from app.models.user import User
 from app.schemas.inquiry import (
@@ -107,13 +108,25 @@ def create_inquiry(
     if current_user.role.name == "boss":
         raise HTTPException(status_code=403, detail="老板角色无法创建询价单")
 
-    # 业务员归属：默认当前用户；super_admin 可指定
-    salesperson_id = current_user.id
-    if body.salesperson_id and current_user.role.name == "super_admin":
-        salesperson_id = body.salesperson_id
+    customer = db.get(Customer, body.customer_id)
+    if not customer or not customer.is_active:
+        raise HTTPException(status_code=404, detail="客户不存在或已停用")
+
+    # 业务员归属：业务员只能为自己的客户创建；super_admin 默认使用客户负责人，也可指定业务员
+    if current_user.role.name == "salesperson":
+        if customer.owner_id != current_user.id:
+            raise HTTPException(status_code=403, detail="无权限为该客户创建询价单")
+        salesperson_id = current_user.id
+    elif current_user.role.name == "super_admin":
+        salesperson_id = body.salesperson_id or customer.owner_id
+    else:
+        raise HTTPException(status_code=403, detail="无权限创建询价单")
+
     salesperson = db.get(User, salesperson_id)
-    if not salesperson:
-        raise HTTPException(status_code=404, detail="业务员不存在")
+    if not salesperson or salesperson.role.name != "salesperson":
+        raise HTTPException(status_code=400, detail="业务员不存在或角色无效")
+    if not salesperson.salesperson_code:
+        raise HTTPException(status_code=400, detail="业务员未分配业务员编码，无法生成询价编号")
 
     now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     for _attempt in range(5):

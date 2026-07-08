@@ -239,6 +239,15 @@ def create_customer(
         raise HTTPException(status_code=400, detail="客户分级无效")
 
     now_str = _utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    owner_id = current.id
+    if current.role.name == "super_admin":
+        if body.owner_id is None:
+            raise HTTPException(status_code=400, detail="请选择客户负责人")
+        owner = db.get(User, body.owner_id)
+        if not owner or not owner.is_active or owner.role.name != "salesperson":
+            raise HTTPException(status_code=400, detail="客户负责人必须是在职业务员")
+        owner_id = owner.id
+
     customer = Customer(
         company_name=body.company_name,
         country=body.country,
@@ -248,7 +257,7 @@ def create_customer(
         trade_terms=body.trade_terms,
         payment_terms=body.payment_terms,
         grade=body.grade,
-        owner_id=current.id,
+        owner_id=owner_id,
         follow_freq="daily",
         follow_freq_updated_at=now_str,
         consecutive_miss_cycles=0,
