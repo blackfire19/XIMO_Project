@@ -144,6 +144,8 @@ def delete_file(
     rec = db.query(AccountingRecord).filter(AccountingRecord.order_id == order_id).first()
     if not rec or not rec.file_path:
         raise HTTPException(status_code=404, detail="无附件可删除")
+    if rec.salary_calculated:
+        raise HTTPException(status_code=400, detail="工资已核算，无法删除记账附件")
     full_path = os.path.join(settings.UPLOAD_DIR, rec.file_path)
     rec.file_name = None
     rec.file_path = None

@@ -123,6 +123,14 @@
           <a-input v-model:value="form.contact_name" />
         </a-form-item>
 
+        <a-form-item v-if="auth.hasRole('super_admin') && !editingCustomer" label="负责人" name="owner_id" required>
+          <a-select
+            v-model:value="form.owner_id"
+            placeholder="请选择业务员"
+            :options="salespersonOptions"
+          />
+        </a-form-item>
+
         <a-form-item label="邮箱" name="email">
           <a-input v-model:value="form.email" />
         </a-form-item>
@@ -165,6 +173,7 @@ import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { customersApi } from '@/api/customers'
+import { usersApi } from '@/api/users'
 import { fmtCustomer } from '@/utils/format'
 import { filterCountries, countryLabel } from '@/utils/countries'
 
@@ -194,11 +203,13 @@ const saving = ref(false)
 const modalVisible = ref(false)
 const editingCustomer = ref(null)
 const formRef = ref()
+const salespersonOptions = ref([])
 
 const form = reactive({
   company_name: '',
   country: '',
   contact_name: '',
+  owner_id: undefined,
   email: '',
   phone: '',
   trade_terms: undefined,
@@ -287,6 +298,9 @@ function openCreate() {
   editingCustomer.value = null
   resetForm()
   modalVisible.value = true
+  if (auth.hasRole('super_admin')) {
+    loadSalespersons()
+  }
 }
 
 function openEdit(record) {
@@ -294,6 +308,7 @@ function openEdit(record) {
   form.company_name = record.company_name
   form.country = record.country
   form.contact_name = record.contact_name
+  form.owner_id = record.owner?.id
   form.email = record.email || ''
   form.phone = record.phone || ''
   form.trade_terms = record.trade_terms || undefined
@@ -306,6 +321,7 @@ function resetForm() {
   form.company_name = ''
   form.country = ''
   form.contact_name = ''
+  form.owner_id = undefined
   form.email = ''
   form.phone = ''
   form.trade_terms = undefined
@@ -320,6 +336,10 @@ async function handleSubmit() {
   } catch {
     return
   }
+  if (!editingCustomer.value && auth.hasRole('super_admin') && !form.owner_id) {
+    message.warning('请选择客户负责人')
+    return
+  }
 
   saving.value = true
   try {
@@ -327,6 +347,7 @@ async function handleSubmit() {
       company_name: form.company_name,
       country: form.country,
       contact_name: form.contact_name,
+      owner_id: !editingCustomer.value && auth.hasRole('super_admin') ? form.owner_id : undefined,
       email: form.email || null,
       phone: form.phone || null,
       trade_terms: form.trade_terms || null,
@@ -347,6 +368,14 @@ async function handleSubmit() {
   } finally {
     saving.value = false
   }
+}
+
+async function loadSalespersons() {
+  const res = await usersApi.salespersons()
+  salespersonOptions.value = res.data.map((u) => ({
+    value: u.id,
+    label: u.full_name,
+  }))
 }
 
 onMounted(() => {

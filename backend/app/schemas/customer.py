@@ -6,6 +6,7 @@ class CustomerCreate(BaseModel):
     company_name: str
     country: str
     contact_name: str
+    owner_id: Optional[int] = None
     email: Optional[str] = None
     phone: Optional[str] = None
     trade_terms: Optional[str] = None

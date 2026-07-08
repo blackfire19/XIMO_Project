@@ -6,7 +6,7 @@ from starlette.requests import Request
 import os
 
 from app.config import settings
-from app.routers import auth, users, customers, products, announcements, dashboard, inquiries, formal_orders, evaluations, accounting
+from app.routers import auth, users, customers, announcements, dashboard, inquiries, formal_orders, evaluations, accounting
 
 app = FastAPI(title="XIMOSteel API", version="1.0.0")
 
@@ -45,7 +45,6 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads"
 app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(customers.router, prefix="/api")
-app.include_router(products.router, prefix="/api")
 app.include_router(inquiries.router, prefix="/api")
 app.include_router(formal_orders.router, prefix="/api")
 app.include_router(announcements.router, prefix="/api")

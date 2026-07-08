@@ -18,10 +18,6 @@
           <a-menu-item key="/customers">客户列表</a-menu-item>
           <a-menu-item key="/follow-ups">跟进记录</a-menu-item>
         </a-sub-menu>
-        <a-menu-item v-if="!auth.hasRole('finance', 'logistics')" key="/products">
-          <database-outlined />
-          <span>产品库</span>
-        </a-menu-item>
         <a-menu-item v-if="!auth.hasRole('finance', 'logistics')" key="/inquiries">
           <file-text-outlined />
           <span>询价单</span>
@@ -56,7 +52,7 @@ import { ref, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
-  DashboardOutlined, TeamOutlined, DatabaseOutlined,
+  DashboardOutlined, TeamOutlined,
   FileTextOutlined, ShoppingOutlined, SettingOutlined,
 } from '@ant-design/icons-vue'
 
